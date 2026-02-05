@@ -30,7 +30,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-function SortableImage({ image, onRemove }) {
+function SortableImage({ image, onRemove, onUpdate }) {
   const {
     attributes,
     listeners,
@@ -48,22 +48,51 @@ function SortableImage({ image, onRemove }) {
     <div 
       ref={setNodeRef} 
       style={style} 
-      className="relative group bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm"
+      className="relative group bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm flex flex-col"
     >
-      <div className="aspect-video bg-slate-100 flex items-center justify-center overflow-hidden">
+      <div className="aspect-video bg-slate-100 flex items-center justify-center overflow-hidden relative">
         <img src={image.preview} alt="preview" className="w-full h-full object-contain" />
-      </div>
-      <div className="p-3 flex items-center justify-between">
-        <div {...attributes} {...listeners} className="cursor-grab p-1 hover:bg-slate-100 rounded">
-          <GripVertical size={18} className="text-slate-400" />
-        </div>
-        <span className="text-xs text-slate-500 truncate flex-1 px-2">{image.name}</span>
         <button 
           onClick={() => onRemove(image.id)}
-          className="p-1 text-red-400 hover:bg-red-50 rounded"
+          className="absolute top-2 right-2 p-1 bg-white/80 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-full transition-colors"
         >
-          <X size={18} />
+          <X size={16} />
         </button>
+      </div>
+      
+      <div className="p-3 space-y-3 bg-white">
+        <div className="flex items-center gap-2">
+          <div {...attributes} {...listeners} className="cursor-grab p-1 hover:bg-slate-100 rounded text-slate-400">
+            <GripVertical size={18} />
+          </div>
+          <span className="text-xs text-slate-500 truncate flex-1">{image.name}</span>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1 block">정답</label>
+            <input 
+              type="text" 
+              placeholder="답 입력"
+              value={image.answer || ''}
+              onChange={(e) => onUpdate(image.id, { answer: e.target.value })}
+              className="w-full text-sm px-2 py-1.5 bg-slate-50 border border-slate-200 rounded focus:ring-1 focus:ring-indigo-500 outline-none transition-all"
+            />
+          </div>
+          <div>
+            <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1 block">배점</label>
+            <div className="relative">
+              <input 
+                type="number" 
+                placeholder="자동"
+                value={image.score || ''}
+                onChange={(e) => onUpdate(image.id, { score: e.target.value === '' ? '' : Number(e.target.value) })}
+                className="w-full text-sm px-2 py-1.5 bg-slate-50 border border-slate-200 rounded focus:ring-1 focus:ring-indigo-500 outline-none transition-all pl-2"
+              />
+              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400">점</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -97,7 +126,9 @@ export default function ExamCreator() {
       name: file.name,
       preview: URL.createObjectURL(file),
       lastModified: file.lastModified,
-      size: file.size
+      size: file.size,
+      answer: '',
+      score: ''
     }));
     setImages(prev => [...prev, ...newImages]);
   };
@@ -115,13 +146,19 @@ export default function ExamCreator() {
       name: file.name,
       preview: URL.createObjectURL(file),
       lastModified: file.lastModified,
-      size: file.size
+      size: file.size,
+      answer: '',
+      score: ''
     }));
     setImages(prev => [...prev, ...newImages]);
   };
 
   const removeImage = (id) => {
     setImages(prev => prev.filter(img => img.id !== id));
+  };
+
+  const updateImage = (id, updates) => {
+    setImages(prev => prev.map(img => img.id === id ? { ...img, ...updates } : img));
   };
 
   const handleDragEnd = (event) => {
@@ -150,19 +187,73 @@ export default function ExamCreator() {
     setImages(sorted);
   };
 
+  const distributeScores = (items) => {
+    const totalScore = 100;
+    let currentTotal = 0;
+    let unassignedCount = 0;
+
+    // Calculate currently assigned scores
+    items.forEach(img => {
+      if (img.score && img.score > 0) {
+        currentTotal += Number(img.score);
+      } else {
+        unassignedCount++;
+      }
+    });
+
+    if (unassignedCount === 0) {
+        // If all assigned but sum != 100, warn? Or just return as is?
+        // For now, if user manually entered all, we respect it even if not 100.
+        // But if they want auto, they should leave some blank.
+        return items; 
+    }
+
+    const remainingScore = totalScore - currentTotal;
+    
+    // If remaining score is negative or zero, we can't distribute. 
+    // Maybe set 0 to unassigned? 
+    if (remainingScore <= 0) {
+       return items.map(img => ({
+           ...img,
+           score: img.score || 0
+       }));
+    }
+
+    const baseScore = Math.floor(remainingScore / unassignedCount);
+    const remainder = remainingScore % unassignedCount;
+
+    let remainderCount = remainder;
+
+    return items.map(img => {
+      if (img.score && img.score > 0) return img;
+      
+      let newScore = baseScore;
+      if (remainderCount > 0) {
+        newScore += 1;
+        remainderCount--;
+      }
+      return { ...img, score: newScore };
+    });
+  };
+
   const handleSave = async () => {
     if (!title) return alert('시험지 제목을 입력하세요.');
     if (!selectedClassId) return alert('대상 클래스를 선택하세요.');
     if (images.length === 0) return alert('최소 하나 이상의 이미지를 추가하세요.');
 
+    // Auto distribute scores for empty fields
+    const scoredImages = distributeScores(images);
+
     const examData = {
       title,
       classId: Number(selectedClassId),
-      images: images.map((img, index) => ({
+      images: scoredImages.map((img, index) => ({
         id: img.id,
         name: img.name,
         file: img.file, // Blob is stored directly
-        order: index
+        order: index,
+        answer: img.answer || '',
+        score: img.score
       })),
       config: {
         layout,
@@ -274,7 +365,12 @@ export default function ExamCreator() {
                     strategy={verticalListSortingStrategy}
                   >
                     {images.map((img) => (
-                      <SortableImage key={img.id} image={img} onRemove={removeImage} />
+                      <SortableImage 
+                        key={img.id} 
+                        image={img} 
+                        onRemove={removeImage}
+                        onUpdate={updateImage} 
+                      />
                     ))}
                   </SortableContext>
                 </div>

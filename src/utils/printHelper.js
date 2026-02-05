@@ -43,7 +43,7 @@ export const printExam = (title, images, config) => {
           }
           .info {
             display: flex;
-            justify-content: center;
+            justify-content: flex-end;
             gap: 2rem;
             font-size: 12pt;
             font-weight: bold;
@@ -82,6 +82,14 @@ export const printExam = (title, images, config) => {
             padding-top: 0.2rem;
             flex-shrink: 0;
           }
+          .q-score {
+            font-size: 10pt;
+            font-weight: bold;
+            color: #000;
+            margin-top: 5px;
+            display: block;
+            text-align: right;
+          }
           .q-img-wrap {
             flex: 1;
             text-align: center;
@@ -89,6 +97,23 @@ export const printExam = (title, images, config) => {
           .q-img {
             max-width: 100%;
             height: auto;
+          }
+          .page-break {
+            page-break-before: always;
+          }
+          .answer-key-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12pt;
+          }
+          .answer-key-table th, .answer-key-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+          }
+          .answer-key-table th {
+            background-color: #f8f9fa;
+            font-weight: bold;
           }
         </style>
       </head>
@@ -113,11 +138,52 @@ export const printExam = (title, images, config) => {
                     style="width: ${img.scale || 100}%"
                     loading="eager" 
                   />
+                  ${img.score ? `<div class="q-score">(${img.score}점)</div>` : ''}
                 </div>
               </div>
             </div>
           `).join('')}
         </div>
+
+        <div class="page-break"></div>
+
+        <div class="header">
+          <h1>${title} - 정답 및 배점</h1>
+        </div>
+        
+        <table class="answer-key-table">
+          <thead>
+            <tr>
+              <th>번호</th>
+              <th>정답</th>
+              <th>배점</th>
+              <th>번호</th>
+              <th>정답</th>
+              <th>배점</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${(() => {
+              const half = Math.ceil(images.length / 2);
+              let rows = '';
+              for (let i = 0; i < half; i++) {
+                const img1 = images[i];
+                const img2 = images[i + half];
+                rows += `
+                  <tr>
+                    <td>${i + 1}</td>
+                    <td>${img1.answer || '-'}</td>
+                    <td>${img1.score || '-'}</td>
+                    <td>${img2 ? i + 1 + half : ''}</td>
+                    <td>${img2 ? (img2.answer || '-') : ''}</td>
+                    <td>${img2 ? (img2.score || '-') : ''}</td>
+                  </tr>
+                `;
+              }
+              return rows;
+            })()}
+          </tbody>
+        </table>
       </body>
     </html>
   `;

@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import Home from './pages/Home';
 import ClassDetail from './pages/ClassDetail';
@@ -7,10 +7,11 @@ import ExamDetail from './pages/ExamDetail';
 import StudentDetail from './pages/StudentDetail';
 import WrongNoteCreator from './pages/WrongNoteCreator';
 import WrongNoteDetail from './pages/WrongNoteDetail';
+import Settings from './pages/Settings';
 
 function App() {
   return (
-    <Router>
+    <Router basename="/testpaper">
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<Home />} />
@@ -20,6 +21,10 @@ function App() {
           <Route path="exam/:examId" element={<ExamDetail />} />
           <Route path="exam/wrong/:noteId" element={<WrongNoteDetail />} />
           <Route path="wrong-note/new/:studentId/:examId" element={<WrongNoteCreator />} />
+          <Route path="wrong-note/edit/:noteId" element={<WrongNoteCreator />} />
+          <Route path="settings" element={<Settings />} />
+          {/* Catch-all redirect */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
     </Router>

@@ -144,12 +144,20 @@ export default function StudentDetail() {
                   <span>문제 {note.images.length}개</span>
                 </div>
                 
-                <button 
-                  onClick={() => navigate(`/exam/wrong/${note.id}`)}
-                  className="w-full mt-6 py-2.5 bg-slate-50 group-hover:bg-indigo-600 group-hover:text-white text-slate-600 rounded-xl text-sm font-bold transition-all"
-                >
-                  상세보기 및 인쇄
-                </button>
+                <div className="grid grid-cols-2 gap-2 mt-6">
+                  <button 
+                    onClick={() => navigate(`/exam/wrong/${note.id}`)}
+                    className="py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold transition-all hover:bg-indigo-700 shadow-md shadow-indigo-100"
+                  >
+                    오답노트보기
+                  </button>
+                  <button 
+                    onClick={() => navigate(`/exam/${note.examId}`)}
+                    className="py-2.5 bg-slate-100 text-slate-600 rounded-xl text-sm font-bold transition-all hover:bg-slate-200"
+                  >
+                    원본 문제 보기
+                  </button>
+                </div>
               </div>
             ))}
           </div>

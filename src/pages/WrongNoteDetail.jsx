@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { ListPlus, FileText } from 'lucide-react';
 import { db } from '../db/db';
 import { printExam } from '../utils/printHelper';
 import ExamHeader from '../components/exam/ExamHeader';
@@ -13,6 +14,10 @@ export default function WrongNoteDetail() {
   const id = Number(noteId);
 
   const note = useLiveQuery(() => db.wrongNotes.get(id), [id]);
+  const student = useLiveQuery(() => 
+    note ? db.students.get(note.studentId) : null
+  , [note]);
+
   const [localConfig, setLocalConfig] = useState(null);
   const [imageUrls, setImageUrls] = useState([]);
   const [isEditing, setIsEditing] = useState(false);
@@ -36,6 +41,10 @@ export default function WrongNoteDetail() {
 
   const handlePrint = () => {
     printExam(editedTitle, imageUrls, localConfig);
+  };
+
+  const handleChangeQuestions = () => {
+    navigate(`/wrong-note/edit/${id}`);
   };
 
   const saveConfig = async () => {
@@ -80,10 +89,15 @@ export default function WrongNoteDetail() {
      // Optional: Implement adding images to wrong note if requested later
   };
 
+  const handleCreateNewWrongNote = () => {
+    navigate(`/wrong-note/new/${note.studentId}/${note.examId}`);
+  };
+
   return (
     <div className="flex flex-col h-screen bg-slate-100">
       <ExamHeader 
         title={editedTitle}
+        subtitle={student ? `학생: ${student.name}` : ''}
         isEditing={isEditing}
         onTitleChange={setEditedTitle}
         onBack={() => navigate(`/student/${note.studentId}`)}
@@ -92,6 +106,26 @@ export default function WrongNoteDetail() {
         onPrint={handlePrint}
         onDelete={deleteNote}
         deleteTooltip="오답노트 삭제"
+        extraActions={
+          !isEditing && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => navigate(`/exam/${note.examId}`)}
+                className="flex items-center gap-2 text-slate-600 bg-slate-100 px-4 py-2 rounded-lg font-medium hover:bg-slate-200 transition-colors"
+              >
+                <FileText size={18} />
+                원본 시험지
+              </button>
+              <button
+                onClick={handleChangeQuestions}
+                className="flex items-center gap-2 text-indigo-600 bg-indigo-50 px-4 py-2 rounded-lg font-medium hover:bg-indigo-100 transition-colors"
+              >
+                <ListPlus size={18} />
+                문제 변경
+              </button>
+            </div>
+          )
+        }
       />
 
       <div className="flex-1 flex overflow-hidden">
@@ -99,7 +133,8 @@ export default function WrongNoteDetail() {
           localConfig={localConfig}
           setLocalConfig={setLocalConfig}
           isEditing={isEditing}
-          onAddImage={handleAddImage} // Might be unused/hidden by CSS if we don't implement the input, but component expects it
+          onAddImage={handleAddImage}
+          onCreateNewWrongNote={handleCreateNewWrongNote}
         />
 
         <ExamPreview 
