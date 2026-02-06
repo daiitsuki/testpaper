@@ -66,11 +66,11 @@ function SortableSimpleItem({ img, idx, onImageUpdate }) {
       />
       <input
         type="number"
-        value={img.score || ""}
+        value={img.score === 0 ? "0" : (img.score || "")}
         onChange={(e) =>
-          onImageUpdate(img.id, { score: Number(e.target.value) })
+          onImageUpdate(img.id, { score: e.target.value === '' ? '' : Number(e.target.value) })
         }
-        placeholder="0"
+        placeholder="자동"
         className="w-12 bg-white border border-slate-200 rounded-lg px-1 py-1 text-sm text-center focus:ring-2 focus:ring-indigo-500 outline-none"
       />
     </div>

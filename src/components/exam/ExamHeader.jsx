@@ -14,7 +14,11 @@ export default function ExamHeader({
   extraActions,
   onToggleSimpleEdit,
   isSimpleEditing,
+  hasChanges,
+  onCancel,
 }) {
+  const showSaveActions = isEditing || isSimpleEditing || hasChanges;
+
   return (
     <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between z-10 shadow-sm">
       <div className="flex items-center gap-4">
@@ -43,11 +47,11 @@ export default function ExamHeader({
       </div>
       <div className="flex items-center gap-3">
         {extraActions}
-        {isEditing || isSimpleEditing ? (
+        {showSaveActions ? (
           <>
             <button
               onClick={onSave}
-              className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-indigo-700 transition-colors"
+              className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-indigo-700 transition-colors animate-in fade-in zoom-in duration-200"
             >
               <Save size={18} />
               저장
@@ -63,7 +67,7 @@ export default function ExamHeader({
               </button>
             ) : (
               <button
-                onClick={onToggleSimpleEdit}
+                onClick={onCancel || onToggleSimpleEdit}
                 className="flex items-center gap-2 text-slate-600 bg-slate-100 px-4 py-2 rounded-lg font-medium hover:bg-slate-200 transition-colors"
               >
                 취소

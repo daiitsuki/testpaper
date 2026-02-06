@@ -18,7 +18,7 @@ import { CSS } from "@dnd-kit/utilities";
 
 // A4 specs
 const A4_HEIGHT_MM = 297;
-const PADDING_MM = 20;
+const PADDING_MM = 10; // Match printHelper margin: 10mm
 const CONTENT_HEIGHT_MM = A4_HEIGHT_MM - PADDING_MM * 2;
 const MM_TO_PX = 3.78;
 const PAGE_CONTENT_HEIGHT_PX = CONTENT_HEIGHT_MM * MM_TO_PX;
@@ -26,21 +26,29 @@ const PAGE_CONTENT_HEIGHT_PX = CONTENT_HEIGHT_MM * MM_TO_PX;
 // Optimized item for measurement - only re-renders if layout props change
 const MeasureItem = memo(({ url, scale, score, idx, spacing }) => (
   <div
-    style={{ marginBottom: `${spacing}px` }}
-    className="question-item break-inside-avoid relative group inline-block w-full align-top"
+    style={{ paddingBottom: `${spacing}px` }}
+    className="question-item break-inside-avoid relative group block w-full align-top"
   >
-    <div className="flex items-start gap-2 mb-2">
-      <span className="font-bold text-lg leading-none pt-1">{idx + 1}.</span>
+    <div className="flex items-start gap-2">
+      <span 
+        className="font-bold shrink-0" 
+        style={{ fontSize: '14pt', lineHeight: '1', paddingTop: '0.2rem' }}
+      >
+        {idx + 1}.
+      </span>
       <div className="flex-1 relative">
         <div className="relative inline-block w-full text-center">
           <img
             src={url}
             alt={`Q${idx + 1}`}
             style={{ width: `${scale}%` }}
-            className="max-w-full h-auto mx-auto"
+            className="max-w-full h-auto mx-auto block"
           />
-          {score && (
-            <div className="text-right font-bold mt-1 text-sm text-slate-800">
+          {score > 0 && (
+            <div 
+              className="text-right font-bold text-black"
+              style={{ fontSize: '10pt', marginTop: '5px' }}
+            >
               ({score}점)
             </div>
           )}
@@ -74,7 +82,7 @@ const QuestionItem = memo(
     const style = {
       transform: CSS.Transform.toString(transform),
       transition,
-      marginBottom: `${config?.spacing}px`,
+      paddingBottom: `${config?.spacing}px`,
       opacity: isDragging ? 0.5 : 1,
       zIndex: isDragging ? 50 : "auto",
     };
@@ -87,10 +95,13 @@ const QuestionItem = memo(
           setNodeRef(node);
         }}
         style={style}
-        className="question-item break-inside-avoid relative group inline-block w-full align-top"
+        className="question-item break-inside-avoid relative group block w-full align-top"
       >
-        <div className="flex items-start gap-2 mb-2">
-          <span className="font-bold text-lg leading-none pt-1">
+        <div className="flex items-start gap-2">
+          <span 
+            className="font-bold shrink-0" 
+            style={{ fontSize: '14pt', lineHeight: '1', paddingTop: '0.2rem' }}
+          >
             {idx + 1}.
           </span>
           <div className="flex-1 relative">
@@ -99,10 +110,13 @@ const QuestionItem = memo(
                 src={img.url}
                 alt={`Q${idx + 1}`}
                 style={{ width: `${img.scale}%` }}
-                className="max-w-full h-auto mx-auto"
+                className="max-w-full h-auto mx-auto block"
               />
-              {img.score && (
-                <div className="text-right font-bold mt-1 text-sm text-slate-800">
+              {img.score > 0 && (
+                <div 
+                  className="text-right font-bold text-black"
+                  style={{ fontSize: '10pt', marginTop: '5px' }}
+                >
                   ({img.score}점)
                 </div>
               )}
@@ -219,36 +233,65 @@ export default function ExamPreview({
   const measureAndPaginate = () => {
     if (!measureContainerRef.current) return;
 
-    const items = measureContainerRef.current.children;
-    const heights = [];
-    for (let i = 0; i < items.length; i++) {
-      heights.push(items[i].offsetHeight);
-    }
+    const children = measureContainerRef.current.children;
+    const headerElement = children[0];
+    const questionElements = Array.from(children).slice(1);
+    
+    // Header height including margin
+    const getFullHeight = (el) => {
+      const style = window.getComputedStyle(el);
+      return el.offsetHeight + parseInt(style.marginTop || 0) + parseInt(style.marginBottom || 0);
+    };
 
-    const headerHeight = 120;
-    const PAGE_HEIGHT = 960;
+    const measuredHeaderHeight = getFullHeight(headerElement);
+    const heights = questionElements.map(el => el.offsetHeight);
+
+    // Precise A4 content area height: 297mm - 20mm padding = 277mm
+    const tempPage = document.createElement('div');
+    tempPage.style.height = '277mm';
+    tempPage.style.visibility = 'hidden';
+    tempPage.style.position = 'absolute';
+    document.body.appendChild(tempPage);
+    const CONTENT_HEIGHT = tempPage.offsetHeight;
+    document.body.removeChild(tempPage);
+
+    const SAFE_PAGE_HEIGHT = CONTENT_HEIGHT - 2;
 
     const newPages = [];
-    let currentPage = { items: [], currentHeight: 0 };
-
-    currentPage.currentHeight += headerHeight;
+    let currentPageItems = [];
+    let currentColHeight = 0;
+    let currentColIndex = 0;
 
     const isTwoCol = config?.layout === "2column";
-    const effectivePageCapacity = isTwoCol ? PAGE_HEIGHT * 2 : PAGE_HEIGHT;
+    const maxCols = isTwoCol ? 2 : 1;
 
     images.forEach((img, idx) => {
-      const itemHeight = (heights[idx] || 150) + (config?.spacing || 0);
+      const itemHeight = (heights[idx] || 150);
+      const isFirstPage = newPages.length === 0;
+      
+      const availableColHeight = (isFirstPage && (currentColIndex === 0 || isTwoCol)) 
+        ? (SAFE_PAGE_HEIGHT - measuredHeaderHeight) 
+        : SAFE_PAGE_HEIGHT;
 
-      if (currentPage.currentHeight + itemHeight > effectivePageCapacity) {
-        newPages.push(currentPage.items);
-        currentPage = { items: [], currentHeight: 0 };
+      if (currentColHeight + itemHeight > availableColHeight) {
+        currentColIndex++;
+        if (currentColIndex >= maxCols) {
+          newPages.push(currentPageItems);
+          currentPageItems = [idx];
+          currentColHeight = itemHeight;
+          currentColIndex = 0;
+        } else {
+          currentPageItems.push(idx);
+          currentColHeight = itemHeight;
+        }
+      } else {
+        currentPageItems.push(idx);
+        currentColHeight += itemHeight;
       }
-      currentPage.items.push(idx);
-      currentPage.currentHeight += itemHeight;
     });
 
-    if (currentPage.items.length > 0) {
-      newPages.push(currentPage.items);
+    if (currentPageItems.length > 0) {
+      newPages.push(currentPageItems);
     }
 
     setPages(newPages);
@@ -271,15 +314,27 @@ export default function ExamPreview({
     >
       <div className="flex-1 overflow-y-auto p-8 bg-slate-200">
         <div className="flex flex-col items-center gap-8 pb-16">
-          {/* Hidden Measure Container */}
-          <div style={{ height: 0, overflow: "hidden", visibility: "hidden" }}>
+          {/* Hidden Measure Container - EXACT width as print area */}
+          <div style={{ height: 0, overflow: "hidden", visibility: "hidden", position: 'absolute', top: 0, left: 0 }}>
             <div
               ref={measureContainerRef}
               className="pointer-events-none"
               style={{
-                width: config?.layout === "2column" ? "330px" : "700px",
+                width: config?.layout === "2column" 
+                  ? "calc((210mm - 20mm - 3rem) / 2)" 
+                  : "calc(210mm - 20mm)", 
               }}
             >
+              {/* Header for measurement - Sync with printHelper styles */}
+              <div style={{ textAlign: 'center', borderBottom: '4px double #000', paddingBottom: '0.5rem', marginBottom: '2rem' }}>
+                <h1 style={{ fontSize: '24pt', fontWeight: 900, margin: '0 0 0.5rem 0', letterSpacing: '-0.05em' }}>
+                  {title}
+                </h1>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '2rem', fontSize: '12pt', fontWeight: 'bold', marginBottom: '0.5rem' }}>
+                  <span>이름: ________________</span>
+                </div>
+              </div>
+
               {images.map((img, idx) => (
                 <MeasureItem
                   key={img.id}
@@ -301,28 +356,40 @@ export default function ExamPreview({
             {pages.map((pageItems, pageIdx) => (
               <div
                 key={pageIdx}
-                className="a4-paper bg-white shadow-2xl min-h-[297mm] w-[210mm] p-[20mm] box-border relative overflow-hidden"
+                style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}
+                className="a4-paper bg-white shadow-2xl h-[297mm] w-[210mm] p-[10mm] box-border relative overflow-hidden"
               >
-                {pageIdx === 0 && (
-                  <div className="border-b-4 border-double border-slate-900 pb-4 mb-8 text-center">
-                    <h1 className="text-3xl font-black mb-2 tracking-tighter">
-                      {title}
-                    </h1>
-                    <div className="text-right text-lg font-bold">
-                      <span>이름: ________</span>
-                    </div>
-                  </div>
-                )}
-
                 <div
-                  className={`questions-container ${config?.layout === "2column" ? "columns-2 gap-12" : "columns-1"} space-y-0`}
+                  className={`questions-container h-full ${config?.layout === "2column" ? "columns-2 gap-12" : "columns-1"} space-y-0 text-black`}
                   style={{
                     columnRule:
                       config?.layout === "2column"
                         ? "1px solid #e2e8f0"
                         : "none",
+                    columnGap: config?.layout === "2column" ? "3rem" : "0",
+                    columnFill: "auto",
                   }}
                 >
+                  {pageIdx === 0 && (
+                    <div 
+                      style={{ 
+                        textAlign: 'center', 
+                        borderBottom: '4px double #000', 
+                        paddingBottom: '0.5rem', 
+                        marginBottom: '2rem',
+                        columnSpan: config?.layout === "2column" ? "all" : "none",
+                        WebkitColumnSpan: config?.layout === "2column" ? "all" : "none",
+                      }}
+                    >
+                      <h1 style={{ fontSize: '24pt', fontWeight: 900, margin: '0 0 0.5rem 0', letterSpacing: '-0.05em' }}>
+                        {title}
+                      </h1>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '2rem', fontSize: '12pt', fontWeight: 'bold', marginBottom: '0.5rem' }}>
+                        <span>이름: ________________</span>
+                      </div>
+                    </div>
+                  )}
+
                   {pageItems.map((imgIdx) => {
                     const img = images[imgIdx];
                     return (

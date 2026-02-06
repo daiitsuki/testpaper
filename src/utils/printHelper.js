@@ -32,8 +32,8 @@ export const printExam = (title, images, config) => {
           .header {
             text-align: center;
             border-bottom: 4px double #000;
-            padding-bottom: 1rem;
-            margin-bottom: 2rem;
+            padding-bottom: 0.5rem; /* Reduced to bring line closer to name line */
+            margin-bottom: 2rem; /* Restore margin to provide space after the line */
           }
           .header h1 {
             font-size: 24pt;
@@ -47,6 +47,7 @@ export const printExam = (title, images, config) => {
             gap: 2rem;
             font-size: 12pt;
             font-weight: bold;
+            margin-bottom: 0.5rem;
           }
           .container {
             display: block;
@@ -58,6 +59,7 @@ export const printExam = (title, images, config) => {
             column-count: 2;
             column-gap: 3rem;
             column-rule: 1px solid #e2e8f0; /* Adding the dividing line */
+            column-fill: auto;
           }
           .cols-1 {
             column-count: 1;
@@ -66,9 +68,9 @@ export const printExam = (title, images, config) => {
           .item {
             break-inside: avoid;
             page-break-inside: avoid;
-            display: inline-block;
+            display: block;
             width: 100%;
-            margin-bottom: ${config.spacing}px;
+            padding-bottom: ${config.spacing}px;
           }
           .item-content {
             display: flex;
@@ -118,14 +120,14 @@ export const printExam = (title, images, config) => {
         </style>
       </head>
       <body>
-        <div class="header">
-          <h1>${title}</h1>
-          <div class="info">
-            <span>이름: ________</span>
-          </div>
-        </div>
-
         <div class="container ${config.layout === '2column' ? 'cols-2' : 'cols-1'}">
+          <div class="header" style="${config.layout === '2column' ? 'column-span: all; -webkit-column-span: all;' : ''}">
+            <h1>${title}</h1>
+            <div class="info">
+              <span>이름: ________________</span>
+            </div>
+          </div>
+
           ${images.map((img, idx) => `
             <div class="item">
               <div class="item-content">
@@ -138,7 +140,7 @@ export const printExam = (title, images, config) => {
                     style="width: ${img.scale || 100}%"
                     loading="eager" 
                   />
-                  ${img.score ? `<div class="q-score">(${img.score}점)</div>` : ''}
+                  ${img.score > 0 ? `<div class="q-score">(${img.score}점)</div>` : ''}
                 </div>
               </div>
             </div>

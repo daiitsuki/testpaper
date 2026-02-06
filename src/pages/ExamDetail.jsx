@@ -32,7 +32,7 @@ export default function ExamDetail() {
   , [id]) || [];
 
   useEffect(() => {
-    if (exam) {
+    if (exam && (!localConfig || imageUrls.length === 0)) {
       setLocalConfig(exam.config);
       setEditedTitle(exam.title);
       setSelectedClassId(exam.classId);
@@ -44,7 +44,7 @@ export default function ExamDetail() {
       setImageUrls(urls);
       return () => urls.forEach(u => URL.revokeObjectURL(u.url));
     }
-  }, [exam]);
+  }, [exam, id]);
 
   const handlePrint = () => {
     printExam(editedTitle, imageUrls, localConfig);
@@ -56,8 +56,10 @@ export default function ExamDetail() {
     let unassignedCount = 0;
 
     items.forEach(img => {
-      if (img.score && img.score > 0) {
-        currentTotal += Number(img.score);
+      // Check if score is strictly a number and >= 0
+      const s = img.score;
+      if (s !== null && s !== undefined && s !== '' && !isNaN(s)) {
+        currentTotal += Number(s);
       } else {
         unassignedCount++;
       }
@@ -68,10 +70,13 @@ export default function ExamDetail() {
     const remainingScore = totalScore - currentTotal;
     
     if (remainingScore <= 0) {
-       return items.map(img => ({
+       return items.map(img => {
+         const s = img.score;
+         return {
            ...img,
-           score: img.score || 0
-       }));
+           score: (s !== null && s !== undefined && s !== '' && !isNaN(s)) ? Number(s) : 0
+         };
+       });
     }
 
     const baseScore = Math.floor(remainingScore / unassignedCount);
@@ -80,7 +85,8 @@ export default function ExamDetail() {
     let remainderCount = remainder;
 
     return items.map(img => {
-      if (img.score && img.score > 0) return img;
+      const s = img.score;
+      if (s !== null && s !== undefined && s !== '' && !isNaN(s)) return img;
       
       let newScore = baseScore;
       if (remainderCount > 0) {
@@ -169,8 +175,8 @@ export default function ExamDetail() {
   const handleAutoDistribute = useCallback(async () => {
     if (!confirm('문항들의 점수를 모두 초기화하고 100점에 맞춰 균등하게 재분배하시겠습니까? 저장도 함께 진행됩니다.')) return;
 
-    // Reset all scores to 0 to force redistribution
-    const resetImages = imageUrls.map(img => ({ ...img, score: 0 }));
+    // Reset all scores to empty string to force redistribution
+    const resetImages = imageUrls.map(img => ({ ...img, score: '' }));
     const scoredImages = distributeScores(resetImages);
     
     const updatedImages = scoredImages.map((img, index) => ({
@@ -213,6 +219,29 @@ export default function ExamDetail() {
 
   const currentClass = exam && allClasses ? allClasses.find(c => c.id === exam.classId) : null;
 
+  const hasChanges = exam && (
+    JSON.stringify(localConfig) !== JSON.stringify(exam.config) ||
+    editedTitle !== exam.title ||
+    selectedClassId !== exam.classId ||
+    imageUrls.length !== exam.images.length
+  );
+
+  const handleCancel = () => {
+    if (exam) {
+      setLocalConfig(exam.config);
+      setEditedTitle(exam.title);
+      setSelectedClassId(exam.classId);
+      const urls = exam.images.map(img => ({
+        ...img,
+        url: URL.createObjectURL(img.file),
+        scale: img.scale || 100 
+      }));
+      setImageUrls(urls);
+      setIsEditing(false);
+      setIsSimpleEditing(false);
+    }
+  };
+
   if (!exam || !localConfig) return <div className="p-8">로딩 중...</div>;
 
   return (
@@ -222,9 +251,11 @@ export default function ExamDetail() {
         subtitle={currentClass ? `클래스: ${currentClass.name}` : ''}
         isEditing={isEditing}
         isSimpleEditing={isSimpleEditing}
+        hasChanges={hasChanges}
         onTitleChange={setEditedTitle}
         onBack={() => navigate(`/class/${exam.classId}`)}
         onSave={saveConfig}
+        onCancel={handleCancel}
         onEdit={() => {
           setIsEditing(true);
           setIsSimpleEditing(false);

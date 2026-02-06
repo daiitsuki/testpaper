@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { ListPlus, FileText } from 'lucide-react';
+import { arrayMove } from '@dnd-kit/sortable';
 import { db } from '../db/db';
 import { printExam } from '../utils/printHelper';
 import ExamHeader from '../components/exam/ExamHeader';
@@ -21,10 +22,11 @@ export default function WrongNoteDetail() {
   const [localConfig, setLocalConfig] = useState(null);
   const [imageUrls, setImageUrls] = useState([]);
   const [isEditing, setIsEditing] = useState(false);
+  const [isSimpleEditing, setIsSimpleEditing] = useState(false);
   const [editedTitle, setEditedTitle] = useState('');
 
   useEffect(() => {
-    if (note) {
+    if (note && (!localConfig || imageUrls.length === 0)) {
       setLocalConfig(note.config);
       setEditedTitle(note.title);
       const urls = note.images.map(img => ({
@@ -35,33 +37,22 @@ export default function WrongNoteDetail() {
       setImageUrls(urls);
       return () => urls.forEach(u => URL.revokeObjectURL(u.url));
     }
-  }, [note]);
+  }, [note, id]);
 
-  if (!note || !localConfig) return <div className="p-8">로딩 중...</div>;
-
-  const handlePrint = () => {
-    printExam(editedTitle, imageUrls, localConfig);
+  const handleImageUpdate = (id, updates) => {
+    setImageUrls(prev => prev.map(img => 
+      img.id === id ? { ...img, ...updates } : img
+    ));
   };
+
+  const handleReorder = useCallback((oldIndex, newIndex) => {
+    setImageUrls((items) => {
+      return arrayMove(items, oldIndex, newIndex);
+    });
+  }, []);
 
   const handleChangeQuestions = () => {
     navigate(`/wrong-note/edit/${id}`);
-  };
-
-  const saveConfig = async () => {
-    const updatedImages = imageUrls.map((img, index) => ({
-      id: img.id,
-      name: img.name,
-      file: img.file,
-      order: index,
-      scale: img.scale
-    }));
-
-    await db.wrongNotes.update(id, { 
-      config: localConfig,
-      title: editedTitle,
-      images: updatedImages
-    });
-    setIsEditing(false);
   };
 
   const deleteNote = async () => {
@@ -83,14 +74,62 @@ export default function WrongNoteDetail() {
     ));
   };
   
-  // Note: Wrong notes generally don't add new images, so we pass a no-op or undefined for onAddImage if we strictly don't want it.
-  // Or we could implement it if desired. For now, I'll assume we stick to the existing scope where wrong notes edit existing selections.
   const handleAddImage = (e) => {
      // Optional: Implement adding images to wrong note if requested later
   };
 
+  if (!note || !localConfig) return <div className="p-8">로딩 중...</div>;
+
+  const handlePrint = () => {
+    printExam(editedTitle, imageUrls, localConfig);
+  };
+
   const handleCreateNewWrongNote = () => {
     navigate(`/wrong-note/new/${note.studentId}/${note.examId}`);
+  };
+
+  const hasChanges = note && (
+    JSON.stringify(localConfig) !== JSON.stringify(note.config) ||
+    editedTitle !== note.title ||
+    imageUrls.length !== note.images.length ||
+    JSON.stringify(imageUrls.map(i => i.id)) !== JSON.stringify(note.images.map(i => i.id)) ||
+    JSON.stringify(imageUrls.map(i => ({ a: i.answer, s: i.score }))) !== 
+    JSON.stringify(note.images.map(i => ({ a: i.answer, s: i.score })))
+  );
+
+  const handleCancel = () => {
+    if (note) {
+      setLocalConfig(note.config);
+      setEditedTitle(note.title);
+      const urls = note.images.map(img => ({
+        ...img,
+        url: URL.createObjectURL(img.file),
+        scale: img.scale || 100
+      }));
+      setImageUrls(urls);
+      setIsEditing(false);
+      setIsSimpleEditing(false);
+    }
+  };
+
+  const saveConfig = async () => {
+    const updatedImages = imageUrls.map((img, index) => ({
+      id: img.id,
+      name: img.name,
+      file: img.file,
+      order: index,
+      scale: img.scale,
+      answer: img.answer,
+      score: img.score
+    }));
+
+    await db.wrongNotes.update(id, { 
+      config: localConfig,
+      title: editedTitle,
+      images: updatedImages
+    });
+    setIsEditing(false);
+    setIsSimpleEditing(false);
   };
 
   return (
@@ -99,15 +138,22 @@ export default function WrongNoteDetail() {
         title={editedTitle}
         subtitle={student ? `학생: ${student.name}` : ''}
         isEditing={isEditing}
+        isSimpleEditing={isSimpleEditing}
+        hasChanges={hasChanges}
         onTitleChange={setEditedTitle}
         onBack={() => navigate(`/student/${note.studentId}`)}
         onSave={saveConfig}
-        onEdit={() => setIsEditing(true)}
+        onCancel={handleCancel}
+        onEdit={() => {
+          setIsEditing(true);
+          setIsSimpleEditing(false);
+        }}
+        onToggleSimpleEdit={() => setIsSimpleEditing(!isSimpleEditing)}
         onPrint={handlePrint}
         onDelete={deleteNote}
         deleteTooltip="오답노트 삭제"
         extraActions={
-          !isEditing && (
+          !isEditing && !isSimpleEditing && (
             <div className="flex items-center gap-2">
               <button
                 onClick={() => navigate(`/exam/${note.examId}`)}
@@ -133,8 +179,12 @@ export default function WrongNoteDetail() {
           localConfig={localConfig}
           setLocalConfig={setLocalConfig}
           isEditing={isEditing}
+          isSimpleEditing={isSimpleEditing}
           onAddImage={handleAddImage}
           onCreateNewWrongNote={handleCreateNewWrongNote}
+          images={imageUrls}
+          onImageUpdate={handleImageUpdate}
+          onReorder={handleReorder}
         />
 
         <ExamPreview 
@@ -144,6 +194,8 @@ export default function WrongNoteDetail() {
           isEditing={isEditing}
           onImageScale={handleImageScale}
           onImageDelete={handleDeleteImage}
+          onImageUpdate={handleImageUpdate}
+          onReorder={handleReorder}
         />
       </div>
     </div>

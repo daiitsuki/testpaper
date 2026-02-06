@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import Home from './pages/Home';
 import ClassDetail from './pages/ClassDetail';
@@ -11,7 +11,7 @@ import Settings from './pages/Settings';
 
 function App() {
   return (
-    <Router basename="/testpaper">
+    <Router>
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<Home />} />
