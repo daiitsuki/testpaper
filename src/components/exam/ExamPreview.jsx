@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, memo } from "react";
-import { Maximize2, X, GripVertical } from "lucide-react";
+import { Maximize2, X, GripVertical, Trash2 } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -15,28 +15,29 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { ExamHeaderTemplate, QuestionMetaTemplate, AnswerKeyTemplate } from "./templates";
 
 // A4 specs
 const A4_HEIGHT_MM = 297;
-const PADDING_MM = 10; // Match printHelper margin: 10mm
+const PADDING_MM = 10; // Match print margin: 10mm
 const CONTENT_HEIGHT_MM = A4_HEIGHT_MM - PADDING_MM * 2;
 const MM_TO_PX = 3.78;
 const PAGE_CONTENT_HEIGHT_PX = CONTENT_HEIGHT_MM * MM_TO_PX;
 
-// Optimized item for measurement - only re-renders if layout props change
-const MeasureItem = memo(({ url, scale, score, idx, spacing }) => (
+const MeasureItem = memo(({ url, scale, score, idx, spacing, config, img }) => (
   <div
     style={{ paddingBottom: `${spacing}px` }}
     className="question-item break-inside-avoid relative group block w-full align-top"
   >
+    <QuestionMetaTemplate img={img} config={config} />
     <div className="flex items-start gap-2">
       <span 
         className="font-bold shrink-0" 
-        style={{ fontSize: '14pt', lineHeight: '1', paddingTop: '0.2rem' }}
+        style={{ fontSize: '14pt', lineHeight: '1', paddingTop: '0.2rem', fontFamily: config?.template === 'jschool' ? 'monospace' : 'inherit' }}
       >
-        {idx + 1}.
+        {config?.template === 'jschool' ? String(idx + 1).padStart(2, '0') : `${idx + 1}.`}
       </span>
-      <div className="flex-1 relative">
+      <div className="flex-1 relative min-w-0">
         <div className="relative inline-block w-full text-center">
           <img
             src={url}
@@ -44,7 +45,7 @@ const MeasureItem = memo(({ url, scale, score, idx, spacing }) => (
             style={{ width: `${scale}%` }}
             className="max-w-full h-auto mx-auto block"
           />
-          {score > 0 && (
+          {!(config?.template === 'jschool' && config?.showScore === false) && score > 0 && (
             <div 
               className="text-right font-bold text-black"
               style={{ fontSize: '10pt', marginTop: '5px' }}
@@ -97,14 +98,15 @@ const QuestionItem = memo(
         style={style}
         className="question-item break-inside-avoid relative group block w-full align-top"
       >
+        <QuestionMetaTemplate img={img} config={config} />
         <div className="flex items-start gap-2">
           <span 
             className="font-bold shrink-0" 
-            style={{ fontSize: '14pt', lineHeight: '1', paddingTop: '0.2rem' }}
+            style={{ fontSize: '14pt', lineHeight: '1', paddingTop: '0.2rem', fontFamily: config?.template === 'jschool' ? 'monospace' : 'inherit' }}
           >
-            {idx + 1}.
+            {config?.template === 'jschool' ? String(idx + 1).padStart(2, '0') : `${idx + 1}.`}
           </span>
-          <div className="flex-1 relative">
+          <div className="flex-1 relative min-w-0">
             <div className="relative inline-block w-full text-center">
               <img
                 src={img.url}
@@ -112,7 +114,7 @@ const QuestionItem = memo(
                 style={{ width: `${img.scale}%` }}
                 className="max-w-full h-auto mx-auto block"
               />
-              {img.score > 0 && (
+              {!(config?.template === 'jschool' && config?.showScore === false) && img.score > 0 && (
                 <div 
                   className="text-right font-bold text-black"
                   style={{ fontSize: '10pt', marginTop: '5px' }}
@@ -123,64 +125,151 @@ const QuestionItem = memo(
 
               {isEditing && !measureRef && (
                 <>
-                  <div className="absolute inset-0 border-2 border-transparent group-hover:border-indigo-400/50 rounded-lg pointer-events-none transition-all" />
-                  <div className="absolute -top-10 right-0 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-end gap-2 z-10 p-2">
-                    <div className="bg-white shadow-lg rounded-lg p-2 flex items-center gap-2 border border-slate-100 mb-1">
+                  {/* Subtle hover border highlight */}
+                  <div className="no-print absolute -inset-1 border-2 border-dashed border-transparent group-hover:border-indigo-400/60 rounded-xl pointer-events-none transition-all duration-150" />
+
+                  {/* Clean Floating Toolbar */}
+                  <div className="no-print absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-all duration-150 z-30 pointer-events-none group-hover:pointer-events-auto shadow-xl rounded-xl bg-white/95 backdrop-blur-sm border border-slate-200/90 p-1.5 flex flex-col gap-1.5 max-w-[calc(100%-0.5rem)]">
+                    {/* Primary controls row */}
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       {/* Drag Handle */}
                       <div
                         {...attributes}
                         {...listeners}
-                        className="cursor-grab p-1 hover:bg-slate-100 rounded text-slate-400 mr-1"
+                        className="cursor-grab active:cursor-grabbing p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-indigo-600 transition-colors"
+                        title="드래그하여 순서 이동"
                       >
                         <GripVertical size={16} />
                       </div>
-                      <label className="text-xs font-bold text-slate-500">
-                        답:
-                      </label>
-                      <input
-                        type="text"
-                        value={img.answer || ""}
-                        onChange={(e) =>
-                          onImageUpdate(img.id, { answer: e.target.value })
-                        }
-                        className="w-12 text-xs border rounded px-1"
-                      />
-                      <label className="text-xs font-bold text-slate-500 ml-2">
-                        점수:
-                      </label>
-                      <input
-                        type="number"
-                        value={img.score || ""}
-                        onChange={(e) =>
-                          onImageUpdate(img.id, {
-                            score: Number(e.target.value),
-                          })
-                        }
-                        className="w-10 text-xs border rounded px-1"
-                      />
+
+                      <div className="w-px h-4 bg-slate-200 shrink-0" />
+
+                      {/* Scale Slider */}
+                      <div className="flex items-center gap-1 bg-slate-50 px-2 py-1 rounded-lg border border-slate-200/70" title="문제 이미지 크기">
+                        <Maximize2 size={12} className="text-slate-400 shrink-0" />
+                        <input
+                          type="range"
+                          min="20"
+                          max="100"
+                          step="5"
+                          value={img.scale || 100}
+                          onChange={(e) => onImageScale(img.id, e.target.value)}
+                          className="w-14 h-1 accent-indigo-600 cursor-pointer"
+                        />
+                        <span className="text-[10px] font-bold text-slate-600 min-w-[2.2rem] text-right font-mono">
+                          {img.scale || 100}%
+                        </span>
+                      </div>
+
+                      {/* Answer Input */}
+                      <div className="flex items-center bg-slate-50 border border-slate-200/70 rounded-lg overflow-hidden focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500" title="정답">
+                        <span className="px-1.5 py-0.5 text-[10px] font-bold text-slate-400 bg-slate-100 border-r border-slate-200/70">
+                          답
+                        </span>
+                        <input
+                          type="text"
+                          value={img.answer || ""}
+                          onChange={(e) =>
+                            onImageUpdate(img.id, { answer: e.target.value })
+                          }
+                          placeholder="-"
+                          className="w-10 px-1 py-0.5 text-xs text-center font-medium bg-transparent outline-none"
+                        />
+                      </div>
+
+                      {/* Score Input */}
+                      {!(config?.template === 'jschool' && config?.showScore === false) && (
+                        <div className="flex items-center bg-slate-50 border border-slate-200/70 rounded-lg overflow-hidden focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500" title="배점">
+                          <span className="px-1.5 py-0.5 text-[10px] font-bold text-slate-400 bg-slate-100 border-r border-slate-200/70">
+                            점
+                          </span>
+                          <input
+                            type="number"
+                            value={img.score || ""}
+                            onChange={(e) =>
+                              onImageUpdate(img.id, {
+                                score: Number(e.target.value),
+                              })
+                            }
+                            placeholder="0"
+                            className="w-10 px-1 py-0.5 text-xs text-center font-medium bg-transparent outline-none"
+                          />
+                        </div>
+                      )}
+
+                      <div className="w-px h-4 bg-slate-200 shrink-0" />
+
+                      {/* Delete Button */}
+                      <button
+                        onClick={() => onImageDelete(img.id)}
+                        className="p-1 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-lg transition-colors"
+                        title="문제 삭제"
+                      >
+                        <Trash2 size={16} />
+                      </button>
                     </div>
-                    <div className="bg-white shadow-lg rounded-lg p-2 flex items-center gap-2 border border-slate-100">
-                      <Maximize2 size={14} className="text-indigo-500" />
-                      <input
-                        type="range"
-                        min="20"
-                        max="100"
-                        step="5"
-                        value={img.scale}
-                        onChange={(e) => onImageScale(img.id, e.target.value)}
-                        className="w-24 accent-indigo-600 h-1.5"
-                      />
-                      <span className="text-xs font-bold text-slate-600 w-8 text-right">
-                        {img.scale}%
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => onImageDelete(img.id)}
-                      className="bg-red-500 text-white p-2 rounded-lg shadow-lg hover:bg-red-600 transition-colors"
-                      title="문제 삭제"
-                    >
-                      <X size={16} />
-                    </button>
+
+                    {/* Secondary row for J SCHOOL template metadata */}
+                    {config?.template === 'jschool' && (
+                      <div className="flex items-center gap-1.5 pt-1 border-t border-slate-100 text-xs flex-wrap">
+                        {/* Badge */}
+                        <div className="flex items-center bg-slate-50 border border-slate-200/70 rounded-lg overflow-hidden focus-within:border-indigo-500" title="배지">
+                          <span className="px-1.5 py-0.5 text-[10px] font-bold text-slate-400 bg-slate-100 border-r border-slate-200/70">
+                            배지
+                          </span>
+                          <select
+                            value={img.badge || ""}
+                            onChange={(e) => onImageUpdate(img.id, { badge: e.target.value })}
+                            className="px-1.5 py-0.5 text-xs text-center bg-transparent outline-none font-medium cursor-pointer"
+                          >
+                            <option value="">없음</option>
+                            <option value="기본">기본</option>
+                            <option value="심화">심화</option>
+                            <option value="발전">발전</option>
+                            {img.badge && !["기본", "심화", "발전", ""].includes(img.badge) && (
+                              <option value={img.badge}>{img.badge}</option>
+                            )}
+                          </select>
+                        </div>
+
+                        {/* Difficulty Stars */}
+                        {config?.showDifficulty !== false && (
+                          <div className="flex items-center bg-slate-50 border border-slate-200/70 rounded-lg px-1.5 py-0.5" title="난이도 (클릭하여 변경)">
+                            <span className="text-[10px] font-bold text-slate-400 mr-1">
+                              난이도
+                            </span>
+                            {[1, 2, 3].map((star) => (
+                              <button
+                                key={star}
+                                type="button"
+                                onClick={() => onImageUpdate(img.id, { difficulty: star })}
+                                className={`text-xs leading-none transition-transform hover:scale-125 px-0.5 ${
+                                  star <= (img?.difficulty || 1)
+                                    ? 'text-amber-400'
+                                    : 'text-slate-200 hover:text-amber-300'
+                                }`}
+                              >
+                                ★
+                              </button>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Question ID */}
+                        <div className="flex items-center bg-slate-50 border border-slate-200/70 rounded-lg overflow-hidden focus-within:border-indigo-500" title="문제 ID">
+                          <span className="px-1.5 py-0.5 text-[10px] font-bold text-slate-400 bg-slate-100 border-r border-slate-200/70">
+                            ID
+                          </span>
+                          <input
+                            type="text"
+                            value={img.questionId || ""}
+                            onChange={(e) => onImageUpdate(img.id, { questionId: e.target.value })}
+                            placeholder="ID"
+                            className="w-14 px-1 py-0.5 text-xs text-center bg-transparent outline-none font-medium"
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </>
               )}
@@ -206,6 +295,15 @@ export default function ExamPreview({
   const [measuring, setMeasuring] = useState(true);
   const measureContainerRef = useRef(null);
 
+  const renderAnswerKey = (isBottom) => (
+    <AnswerKeyTemplate
+      title={title}
+      images={images}
+      config={config}
+      isBottom={isBottom}
+    />
+  );
+
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -226,7 +324,7 @@ export default function ExamPreview({
     const itemsKey = images
       .map((i) => `${i.id}-${i.scale}-${i.score || ""}`)
       .join("|");
-    const configKey = `${config?.layout}-${config?.spacing}-${config?.imageSize}`;
+    const configKey = `${config?.template}-${config?.showScore}-${config?.showDifficulty}-${config?.showWeek}-${config?.showDate}-${config?.layout}-${config?.spacing}-${config?.imageSize}`;
     return `${title}-${itemsKey}-${configKey}`;
   }, [images, config, title]);
 
@@ -325,15 +423,8 @@ export default function ExamPreview({
                   : "calc(210mm - 20mm)", 
               }}
             >
-              {/* Header for measurement - Sync with printHelper styles */}
-              <div style={{ textAlign: 'center', borderBottom: '4px double #000', paddingBottom: '0.5rem', marginBottom: '2rem' }}>
-                <h1 style={{ fontSize: '24pt', fontWeight: 900, margin: '0 0 0.5rem 0', letterSpacing: '-0.05em' }}>
-                  {title}
-                </h1>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '2rem', fontSize: '12pt', fontWeight: 'bold', marginBottom: '0.5rem' }}>
-                  <span>이름: ________________</span>
-                </div>
-              </div>
+              {/* Header for measurement */}
+              <ExamHeaderTemplate title={title} config={config} />
 
               {images.map((img, idx) => (
                 <MeasureItem
@@ -343,132 +434,93 @@ export default function ExamPreview({
                   score={img.score}
                   idx={idx}
                   spacing={config?.spacing}
+                  config={config}
+                  img={img}
                 />
               ))}
             </div>
           </div>
 
           {/* Display Pages */}
-          <SortableContext
-            items={images.map((img) => img.id)}
-            strategy={rectSortingStrategy}
-          >
-            {pages.map((pageItems, pageIdx) => (
-              <div
-                key={pageIdx}
-                style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}
-                className="a4-paper bg-white shadow-2xl h-[297mm] w-[210mm] p-[10mm] box-border relative overflow-hidden"
-              >
+          <div id="exam-preview-pages" className="flex flex-col items-center gap-8 w-full">
+            <SortableContext
+              items={images.map((img) => img.id)}
+              strategy={rectSortingStrategy}
+            >
+              {pages.map((pageItems, pageIdx) => (
                 <div
-                  className={`questions-container h-full ${config?.layout === "2column" ? "columns-2 gap-12" : "columns-1"} space-y-0 text-black`}
-                  style={{
-                    columnRule:
-                      config?.layout === "2column"
-                        ? "1px solid #e2e8f0"
-                        : "none",
-                    columnGap: config?.layout === "2column" ? "3rem" : "0",
-                    columnFill: "auto",
-                  }}
+                  key={pageIdx}
+                  style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}
+                  className="a4-paper bg-white shadow-2xl h-[297mm] w-[210mm] p-[10mm] box-border relative overflow-hidden"
                 >
-                  {pageIdx === 0 && (
-                    <div 
-                      style={{ 
-                        textAlign: 'center', 
-                        borderBottom: '4px double #000', 
-                        paddingBottom: '0.5rem', 
-                        marginBottom: '2rem',
-                        columnSpan: config?.layout === "2column" ? "all" : "none",
-                        WebkitColumnSpan: config?.layout === "2column" ? "all" : "none",
-                      }}
-                    >
-                      <h1 style={{ fontSize: '24pt', fontWeight: 900, margin: '0 0 0.5rem 0', letterSpacing: '-0.05em' }}>
-                        {title}
-                      </h1>
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '2rem', fontSize: '12pt', fontWeight: 'bold', marginBottom: '0.5rem' }}>
-                        <span>이름: ________________</span>
+                  <div
+                    className={`questions-container h-full ${config?.layout === "2column" ? "columns-2 gap-12" : "columns-1"} space-y-0 text-black`}
+                    style={{
+                      columnRule:
+                        config?.layout === "2column"
+                          ? "1px solid #e2e8f0"
+                          : "none",
+                      columnGap: config?.layout === "2column" ? "3rem" : "0",
+                      columnFill: "auto",
+                    }}
+                  >
+                    {pageIdx === 0 && (
+                      <div 
+                        style={{ 
+                          columnSpan: config?.layout === "2column" ? "all" : "none",
+                          WebkitColumnSpan: config?.layout === "2column" ? "all" : "none",
+                        }}
+                      >
+                        <ExamHeaderTemplate title={title} config={config} />
                       </div>
-                    </div>
-                  )}
+                    )}
 
-                  {pageItems.map((imgIdx) => {
-                    const img = images[imgIdx];
-                    return (
-                      <QuestionItem
-                        key={img.id}
-                        img={img}
-                        idx={imgIdx}
-                        config={config}
-                        isEditing={isEditing}
-                        onImageScale={onImageScale}
-                        onImageDelete={onImageDelete}
-                        onImageUpdate={onImageUpdate}
-                      />
-                    );
-                  })}
-                </div>
+                    {pageItems.map((imgIdx) => {
+                      const img = images[imgIdx];
+                      return (
+                        <QuestionItem
+                          key={img.id}
+                          img={img}
+                          idx={imgIdx}
+                          config={config}
+                          isEditing={isEditing}
+                          onImageScale={onImageScale}
+                          onImageDelete={onImageDelete}
+                          onImageUpdate={onImageUpdate}
+                        />
+                      );
+                    })}
+                    {pageIdx === pages.length - 1 && config?.answerKeyLocation === 'bottom' && (
+                      <div 
+                        className="mt-12"
+                        style={{ 
+                          columnSpan: config?.layout === "2column" ? "all" : "none",
+                          WebkitColumnSpan: config?.layout === "2column" ? "all" : "none",
+                        }}
+                      >
+                        {renderAnswerKey(true)}
+                      </div>
+                    )}
+                  </div>
 
-                <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-white to-transparent pointer-events-none flex items-end justify-center pb-2">
-                  <span className="text-xs text-slate-400 font-medium">
-                    {pageIdx + 1} / {pages.length} 페이지
-                  </span>
+                  <div className="no-print absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-white to-transparent pointer-events-none flex items-end justify-center pb-2">
+                    <span className="text-xs text-slate-400 font-medium">
+                      {pageIdx + 1} / {pages.length} 페이지
+                    </span>
+                  </div>
                 </div>
+              ))}
+            </SortableContext>
+
+            {/* Answer Key Page (Separate) */}
+            {config?.answerKeyLocation !== 'bottom' && (
+              <div 
+                style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}
+                className="a4-paper bg-white shadow-2xl min-h-[297mm] w-[210mm] p-[20mm] box-border relative overflow-hidden"
+              >
+                {renderAnswerKey(false)}
               </div>
-            ))}
-          </SortableContext>
-
-          {/* Answer Key Page */}
-          <div className="a4-paper bg-white shadow-2xl min-h-[297mm] w-[210mm] p-[20mm] box-border relative overflow-hidden">
-            <div className="border-b-4 border-double border-slate-900 pb-4 mb-8 text-center">
-              <h1 className="text-2xl font-black mb-2 tracking-tighter">
-                {title} - 정답 및 배점
-              </h1>
-            </div>
-
-            <table className="w-full border-collapse text-center text-sm border border-slate-200">
-              <thead className="bg-slate-50 text-slate-700 font-bold">
-                <tr>
-                  <th className="border border-slate-200 p-2">번호</th>
-                  <th className="border border-slate-200 p-2">정답</th>
-                  <th className="border border-slate-200 p-2">배점</th>
-                  <th className="border border-slate-200 p-2">번호</th>
-                  <th className="border border-slate-200 p-2">정답</th>
-                  <th className="border border-slate-200 p-2">배점</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(() => {
-                  const half = Math.ceil(images.length / 2);
-                  const rows = [];
-                  for (let i = 0; i < half; i++) {
-                    const img1 = images[i];
-                    const img2 = images[i + half];
-                    rows.push(
-                      <tr key={i}>
-                        <td className="border border-slate-200 p-2 font-bold">
-                          {i + 1}
-                        </td>
-                        <td className="border border-slate-200 p-2">
-                          {img1.answer || "-"}
-                        </td>
-                        <td className="border border-slate-200 p-2">
-                          {img1.score || "-"}
-                        </td>
-                        <td className="border border-slate-200 p-2 font-bold">
-                          {img2 ? i + 1 + half : ""}
-                        </td>
-                        <td className="border border-slate-200 p-2">
-                          {img2 ? img2.answer || "-" : ""}
-                        </td>
-                        <td className="border border-slate-200 p-2">
-                          {img2 ? img2.score || "-" : ""}
-                        </td>
-                      </tr>,
-                    );
-                  }
-                  return rows;
-                })()}
-              </tbody>
-            </table>
+            )}
           </div>
         </div>
       </div>

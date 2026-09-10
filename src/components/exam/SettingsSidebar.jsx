@@ -23,8 +23,9 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { useState } from "react";
 
-function SortableSimpleItem({ img, idx, onImageUpdate }) {
+function SortableSimpleItem({ img, idx, onImageUpdate, showScore = true, showDifficulty = true }) {
   const {
     attributes,
     listeners,
@@ -45,34 +46,71 @@ function SortableSimpleItem({ img, idx, onImageUpdate }) {
     <div
       ref={setNodeRef}
       style={style}
-      className="flex items-center gap-2 p-2 bg-slate-50 rounded-xl border border-slate-100 group"
+      className="flex flex-col gap-2 p-2 bg-slate-50 rounded-xl border border-slate-100 group"
     >
-      <div
-        {...attributes}
-        {...listeners}
-        className="cursor-grab p-1 hover:bg-white rounded text-slate-300 hover:text-indigo-600 transition-colors"
-      >
-        <GripVertical size={16} />
+      <div className="flex items-center gap-2">
+        <div
+          {...attributes}
+          {...listeners}
+          className="cursor-grab p-1 hover:bg-white rounded text-slate-300 hover:text-indigo-600 transition-colors"
+        >
+          <GripVertical size={16} />
+        </div>
+        <span className="w-6 text-center font-bold text-slate-400 text-sm">
+          {idx + 1}
+        </span>
+        <input
+          type="text"
+          value={img.answer || ""}
+          onChange={(e) => onImageUpdate(img.id, { answer: e.target.value })}
+          placeholder="정답"
+          className="flex-1 min-w-0 bg-white border border-slate-200 rounded-lg px-2 py-1 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+        />
+        {showScore && (
+          <input
+            type="number"
+            value={img.score === 0 ? "0" : (img.score || "")}
+            onChange={(e) =>
+              onImageUpdate(img.id, { score: e.target.value === '' ? '' : Number(e.target.value) })
+            }
+            placeholder="자동"
+            className="w-12 bg-white border border-slate-200 rounded-lg px-1 py-1 text-sm text-center focus:ring-2 focus:ring-indigo-500 outline-none"
+          />
+        )}
       </div>
-      <span className="w-6 text-center font-bold text-slate-400 text-sm">
-        {idx + 1}
-      </span>
-      <input
-        type="text"
-        value={img.answer || ""}
-        onChange={(e) => onImageUpdate(img.id, { answer: e.target.value })}
-        placeholder="정답"
-        className="flex-1 min-w-0 bg-white border border-slate-200 rounded-lg px-2 py-1 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-      />
-      <input
-        type="number"
-        value={img.score === 0 ? "0" : (img.score || "")}
-        onChange={(e) =>
-          onImageUpdate(img.id, { score: e.target.value === '' ? '' : Number(e.target.value) })
-        }
-        placeholder="자동"
-        className="w-12 bg-white border border-slate-200 rounded-lg px-1 py-1 text-sm text-center focus:ring-2 focus:ring-indigo-500 outline-none"
-      />
+      <div className="flex items-center gap-2 pl-8">
+        <select
+          value={img.badge || ""}
+          onChange={(e) => onImageUpdate(img.id, { badge: e.target.value })}
+          className="w-20 bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer"
+        >
+          <option value="">배지 없음</option>
+          <option value="기본">기본</option>
+          <option value="심화">심화</option>
+          <option value="발전">발전</option>
+          {img.badge && !["기본", "심화", "발전", ""].includes(img.badge) && (
+            <option value={img.badge}>{img.badge}</option>
+          )}
+        </select>
+        {showDifficulty && (
+          <select
+            value={img.difficulty || 1}
+            onChange={(e) => onImageUpdate(img.id, { difficulty: Number(e.target.value) })}
+            className="w-16 bg-white border border-slate-200 rounded-lg px-1 py-1 text-xs focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer"
+          >
+            <option value={1}>★ 1</option>
+            <option value={2}>★ 2</option>
+            <option value={3}>★ 3</option>
+          </select>
+        )}
+        <input
+          type="text"
+          value={img.questionId || ""}
+          onChange={(e) => onImageUpdate(img.id, { questionId: e.target.value })}
+          placeholder="문제 ID"
+          className="flex-1 min-w-0 bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+        />
+      </div>
     </div>
   );
 }
@@ -102,6 +140,33 @@ export default function SettingsSidebar({
     }),
   );
 
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      // Mock the event structure to pass it to onAddImage which expects e.target.files
+      const mockEvent = {
+        target: {
+          files: e.dataTransfer.files
+        }
+      };
+      onAddImage(mockEvent);
+    }
+  };
+
   const handleDragEnd = (event) => {
     const { active, over } = event;
     if (active.id !== over.id) {
@@ -124,7 +189,9 @@ export default function SettingsSidebar({
             <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2">
               <span className="w-16 text-center">번호</span>
               <span className="flex-1 px-4 text-center">정답</span>
-              <span className="w-12 text-center">배점</span>
+              {!(localConfig?.template === "jschool" && localConfig?.showScore === false) && (
+                <span className="w-12 text-center">배점</span>
+              )}
             </div>
             <DndContext
               sensors={sensors}
@@ -142,19 +209,23 @@ export default function SettingsSidebar({
                       img={img}
                       idx={idx}
                       onImageUpdate={onImageUpdate}
+                      showScore={!(localConfig?.template === "jschool" && localConfig?.showScore === false)}
+                      showDifficulty={!(localConfig?.template === "jschool" && localConfig?.showDifficulty === false)}
                     />
                   ))}
                 </div>
               </SortableContext>
             </DndContext>
-            <div className="pt-4 border-t border-slate-100 flex justify-between items-center px-2">
-              <span className="text-sm font-bold text-slate-600">총점</span>
-              <span
-                className={`text-lg font-black ${totalScore === 100 ? "text-emerald-600" : "text-amber-600"}`}
-              >
-                {totalScore}점
-              </span>
-            </div>
+            {!(localConfig?.template === "jschool" && localConfig?.showScore === false) && (
+              <div className="pt-4 border-t border-slate-100 flex justify-between items-center px-2">
+                <span className="text-sm font-bold text-slate-600">총점</span>
+                <span
+                  className={`text-lg font-black ${totalScore === 100 ? "text-emerald-600" : "text-amber-600"}`}
+                >
+                  {totalScore}점
+                </span>
+              </div>
+            )}
           </div>
         )}
 
@@ -196,7 +267,7 @@ export default function SettingsSidebar({
               </div>
             )}
 
-            {onAutoDistribute && totalScore !== 100 && (
+            {onAutoDistribute && !(localConfig?.template === "jschool" && localConfig?.showScore === false) && totalScore !== 100 && (
               <div className="p-4 bg-amber-50 rounded-2xl border border-amber-200 space-y-3">
                 <div className="flex items-start gap-3">
                   <AlertTriangle
@@ -224,17 +295,26 @@ export default function SettingsSidebar({
 
             {isEditing && (
               <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100">
-                <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-indigo-200 border-dashed rounded-xl cursor-pointer bg-white hover:bg-indigo-50 transition-colors group">
-                  <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                <label 
+                  className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-xl cursor-pointer transition-colors group ${
+                    isDragOver 
+                      ? 'border-indigo-500 bg-indigo-100' 
+                      : 'border-indigo-200 bg-white hover:bg-indigo-50'
+                  }`}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                >
+                  <div className="flex flex-col items-center justify-center pt-5 pb-6 pointer-events-none">
                     <Plus
                       size={32}
-                      className="mb-2 text-indigo-400 group-hover:text-indigo-600 transition-colors"
+                      className={`mb-2 transition-colors ${isDragOver ? 'text-indigo-600' : 'text-indigo-400 group-hover:text-indigo-600'}`}
                     />
-                    <p className="mb-2 text-sm text-indigo-500 font-semibold">
+                    <p className={`mb-2 text-sm font-semibold ${isDragOver ? 'text-indigo-700' : 'text-indigo-500'}`}>
                       문제 추가하기
                     </p>
-                    <p className="text-xs text-indigo-400">
-                      클릭하여 이미지 업로드
+                    <p className={`text-xs ${isDragOver ? 'text-indigo-500' : 'text-indigo-400'}`}>
+                      클릭하거나 이미지를 여기로 드래그
                     </p>
                   </div>
                   <input
@@ -247,6 +327,140 @@ export default function SettingsSidebar({
                 </label>
               </div>
             )}
+
+            <div className="space-y-4">
+              <label className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                <LayoutIcon size={16} />템플릿 선택
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { id: "default", label: "기본 템플릿" },
+                  { id: "jschool", label: "J SCHOOL EDU" },
+                ].map((tpl) => (
+                  <button
+                    key={tpl.id}
+                    onClick={() =>
+                      setLocalConfig((prev) => ({ ...prev, template: tpl.id }))
+                    }
+                    className={`py-2 rounded-lg border-2 text-sm font-medium transition-all ${(localConfig?.template || 'default') === tpl.id ? "border-indigo-600 bg-indigo-50 text-indigo-700" : "border-slate-100 text-slate-500 hover:border-slate-200"}`}
+                  >
+                    {tpl.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {localConfig?.template === "jschool" && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-bold text-slate-700">주차 표시</label>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only peer"
+                      checked={localConfig?.showWeek !== false}
+                      onChange={(e) => setLocalConfig(prev => ({ ...prev, showWeek: e.target.checked }))}
+                    />
+                    <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                  </label>
+                </div>
+                {localConfig?.showWeek !== false && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-slate-700">
+                      주차 (Week)
+                    </label>
+                    <input
+                      type="text"
+                      value={localConfig?.weekNumber || "01"}
+                      onChange={(e) =>
+                        setLocalConfig((prev) => ({
+                          ...prev,
+                          weekNumber: e.target.value,
+                        }))
+                      }
+                      placeholder="예: 01"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                    />
+                  </div>
+                )}
+                
+                <div className="flex items-center justify-between mt-4">
+                  <label className="text-sm font-bold text-slate-700">일자 표시</label>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only peer"
+                      checked={localConfig?.showDate !== false}
+                      onChange={(e) => setLocalConfig(prev => ({ ...prev, showDate: e.target.checked }))}
+                    />
+                    <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                  </label>
+                </div>
+                {localConfig?.showDate !== false && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-slate-700">
+                      일자 (Date)
+                    </label>
+                    <input
+                      type="text"
+                      value={localConfig?.date !== undefined ? localConfig.date : new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\./g, '.').replace(/ /g, '')}
+                      onChange={(e) =>
+                        setLocalConfig((prev) => ({
+                          ...prev,
+                          date: e.target.value,
+                        }))
+                      }
+                      placeholder="예: 2026.09.10"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                    />
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between mt-4">
+                  <label className="text-sm font-bold text-slate-700">점수제도</label>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only peer"
+                      checked={localConfig?.showScore !== false}
+                      onChange={(e) => setLocalConfig(prev => ({ ...prev, showScore: e.target.checked }))}
+                    />
+                    <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                  </label>
+                </div>
+
+                <div className="flex items-center justify-between mt-4">
+                  <label className="text-sm font-bold text-slate-700">난이도</label>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only peer"
+                      checked={localConfig?.showDifficulty !== false}
+                      onChange={(e) => setLocalConfig(prev => ({ ...prev, showDifficulty: e.target.checked }))}
+                    />
+                    <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                  </label>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-3 pt-4 border-t border-slate-100">
+              <label className="text-sm font-bold text-slate-700">정답표 위치</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setLocalConfig(prev => ({ ...prev, answerKeyLocation: 'separate' }))}
+                  className={`py-2 rounded-lg border text-sm font-medium transition-all ${localConfig?.answerKeyLocation !== 'bottom' ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-500 hover:border-slate-300'}`}
+                >
+                  새 페이지 분리
+                </button>
+                <button
+                  onClick={() => setLocalConfig(prev => ({ ...prev, answerKeyLocation: 'bottom' }))}
+                  className={`py-2 rounded-lg border text-sm font-medium transition-all ${localConfig?.answerKeyLocation === 'bottom' ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-500 hover:border-slate-300'}`}
+                >
+                  문항 하단 이어서
+                </button>
+              </div>
+            </div>
 
             <div className="space-y-4">
               <label className="text-sm font-bold text-slate-700 flex items-center gap-2">

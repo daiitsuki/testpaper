@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { ListPlus, FileText } from 'lucide-react';
@@ -24,20 +24,96 @@ export default function WrongNoteDetail() {
   const [isEditing, setIsEditing] = useState(false);
   const [isSimpleEditing, setIsSimpleEditing] = useState(false);
   const [editedTitle, setEditedTitle] = useState('');
+  const [saveStatus, setSaveStatus] = useState('saved');
+
+  const urlsRef = useRef([]);
+  const isInitializedRef = useRef(false);
+  const lastSavedRef = useRef(null);
+  const pendingPayloadRef = useRef(null);
 
   useEffect(() => {
-    if (note && (!localConfig || imageUrls.length === 0)) {
+    /* eslint-disable react-hooks/set-state-in-effect */
+    if (note && !isInitializedRef.current) {
       setLocalConfig(note.config);
       setEditedTitle(note.title);
-      const urls = note.images.map(img => ({
-        ...img,
-        url: URL.createObjectURL(img.file),
-        scale: img.scale || 100
-      }));
+      const urls = note.images.map(img => {
+        const url = URL.createObjectURL(img.file);
+        urlsRef.current.push(url);
+        return {
+          ...img,
+          url,
+          scale: img.scale || 100
+        };
+      });
       setImageUrls(urls);
-      return () => urls.forEach(u => URL.revokeObjectURL(u.url));
+      isInitializedRef.current = true;
     }
-  }, [note, id]);
+  }, [note]);
+
+  // Real-time auto-save effect
+  useEffect(() => {
+    if (!isInitializedRef.current || !note) return;
+
+    const payload = {
+      title: editedTitle,
+      config: localConfig,
+      images: imageUrls.map((img, index) => {
+        const { url, ...rest } = img;
+        return { ...rest, order: index };
+      })
+    };
+
+    const payloadHash = JSON.stringify(payload);
+
+    if (lastSavedRef.current === null) {
+      lastSavedRef.current = payloadHash;
+      return;
+    }
+
+    if (lastSavedRef.current === payloadHash) {
+      return;
+    }
+
+    setSaveStatus('saving');
+    pendingPayloadRef.current = payload;
+
+    const timer = setTimeout(async () => {
+      try {
+        await db.wrongNotes.update(id, {
+          title: payload.title,
+          config: payload.config,
+          images: payload.images
+        });
+        lastSavedRef.current = payloadHash;
+        setSaveStatus('saved');
+      } catch (err) {
+        console.error('Auto-save error:', err);
+        setSaveStatus('error');
+      }
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [id, editedTitle, localConfig, imageUrls, note]);
+
+  // Flush pending save on unmount
+  useEffect(() => {
+    return () => {
+      if (pendingPayloadRef.current && lastSavedRef.current !== JSON.stringify(pendingPayloadRef.current)) {
+        db.wrongNotes.update(id, {
+          title: pendingPayloadRef.current.title,
+          config: pendingPayloadRef.current.config,
+          images: pendingPayloadRef.current.images
+        }).catch(console.error);
+      }
+    };
+  }, [id]);
+
+  useEffect(() => {
+    const urls = urlsRef.current;
+    return () => {
+      urls.forEach(u => URL.revokeObjectURL(u));
+    };
+  }, []);
 
   const handleImageUpdate = (id, updates) => {
     setImageUrls(prev => prev.map(img => 
@@ -57,6 +133,7 @@ export default function WrongNoteDetail() {
 
   const deleteNote = async () => {
     if (confirm('이 오답노트를 삭제하시겠습니까?')) {
+      pendingPayloadRef.current = null;
       await db.wrongNotes.delete(id);
       navigate(`/student/${note.studentId}`);
     }
@@ -74,7 +151,7 @@ export default function WrongNoteDetail() {
     ));
   };
   
-  const handleAddImage = (e) => {
+  const handleAddImage = () => {
      // Optional: Implement adding images to wrong note if requested later
   };
 
@@ -88,50 +165,6 @@ export default function WrongNoteDetail() {
     navigate(`/wrong-note/new/${note.studentId}/${note.examId}`);
   };
 
-  const hasChanges = note && (
-    JSON.stringify(localConfig) !== JSON.stringify(note.config) ||
-    editedTitle !== note.title ||
-    imageUrls.length !== note.images.length ||
-    JSON.stringify(imageUrls.map(i => i.id)) !== JSON.stringify(note.images.map(i => i.id)) ||
-    JSON.stringify(imageUrls.map(i => ({ a: i.answer, s: i.score }))) !== 
-    JSON.stringify(note.images.map(i => ({ a: i.answer, s: i.score })))
-  );
-
-  const handleCancel = () => {
-    if (note) {
-      setLocalConfig(note.config);
-      setEditedTitle(note.title);
-      const urls = note.images.map(img => ({
-        ...img,
-        url: URL.createObjectURL(img.file),
-        scale: img.scale || 100
-      }));
-      setImageUrls(urls);
-      setIsEditing(false);
-      setIsSimpleEditing(false);
-    }
-  };
-
-  const saveConfig = async () => {
-    const updatedImages = imageUrls.map((img, index) => ({
-      id: img.id,
-      name: img.name,
-      file: img.file,
-      order: index,
-      scale: img.scale,
-      answer: img.answer,
-      score: img.score
-    }));
-
-    await db.wrongNotes.update(id, { 
-      config: localConfig,
-      title: editedTitle,
-      images: updatedImages
-    });
-    setIsEditing(false);
-    setIsSimpleEditing(false);
-  };
-
   return (
     <div className="flex flex-col h-screen bg-slate-100">
       <ExamHeader 
@@ -139,16 +172,17 @@ export default function WrongNoteDetail() {
         subtitle={student ? `학생: ${student.name}` : ''}
         isEditing={isEditing}
         isSimpleEditing={isSimpleEditing}
-        hasChanges={hasChanges}
+        saveStatus={saveStatus}
         onTitleChange={setEditedTitle}
         onBack={() => navigate(`/student/${note.studentId}`)}
-        onSave={saveConfig}
-        onCancel={handleCancel}
         onEdit={() => {
-          setIsEditing(true);
-          setIsSimpleEditing(false);
+          setIsEditing(prev => !prev);
+          if (!isEditing) setIsSimpleEditing(false);
         }}
-        onToggleSimpleEdit={() => setIsSimpleEditing(!isSimpleEditing)}
+        onToggleSimpleEdit={() => {
+          setIsSimpleEditing(prev => !prev);
+          if (!isSimpleEditing) setIsEditing(false);
+        }}
         onPrint={handlePrint}
         onDelete={deleteNote}
         deleteTooltip="오답노트 삭제"

@@ -41,16 +41,18 @@ export default function WrongNoteCreator() {
     [resolvedExamId],
   );
 
-  const otherNotes =
-    useLiveQuery(
-      () =>
-        resolvedStudentId && resolvedExamId
-          ? db.wrongNotes
-              .where({ studentId: resolvedStudentId, examId: resolvedExamId })
-              .toArray()
-          : [],
-      [resolvedStudentId, resolvedExamId],
-    ) || [];
+  const otherNotesQuery = useLiveQuery(
+    () =>
+      resolvedStudentId && resolvedExamId
+        ? db.wrongNotes
+            .where({ studentId: resolvedStudentId, examId: resolvedExamId })
+            .toArray()
+        : [],
+    [resolvedStudentId, resolvedExamId],
+  );
+  
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const otherNotes = useMemo(() => otherNotesQuery || [], [otherNotesQuery]);
 
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [title, setTitle] = useState("");
@@ -67,6 +69,7 @@ export default function WrongNoteCreator() {
 
   // Effect to load existing note data
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect */
     if (existingNote) {
       setResolvedStudentId(existingNote.studentId);
       setResolvedExamId(existingNote.examId);
@@ -78,6 +81,7 @@ export default function WrongNoteCreator() {
   }, [existingNote]);
 
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect */
     if (student && exam) {
       if (!noteId) {
         setTitle(`${exam.title} 오답노트`);
@@ -109,6 +113,7 @@ export default function WrongNoteCreator() {
       .filter((img) => selectedIds.has(img.id))
       .map((img, index) => ({
         ...img,
+        badge: '오답', // Reset badge for wrong note
         order: index,
       }));
 
@@ -127,10 +132,13 @@ export default function WrongNoteCreator() {
         studentId: resolvedStudentId,
         examId: resolvedExamId,
         images: selectedImages,
-        config: exam.config, // Copy default config from exam
+        config: {
+          ...exam.config,
+          date: new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\./g, '.').replace(/ /g, '')
+        }, // Copy default config from exam but update date
         createdAt: new Date(),
       };
-      const id = await db.wrongNotes.add(noteData);
+      await db.wrongNotes.add(noteData);
       navigate(`/student/${resolvedStudentId}`);
     }
   };

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { arrayMove } from '@dnd-kit/sortable';
@@ -20,6 +20,7 @@ export default function ExamDetail() {
   const [isSimpleEditing, setIsSimpleEditing] = useState(false);
   const [editedTitle, setEditedTitle] = useState('');
   const [selectedClassId, setSelectedClassId] = useState(null);
+  const [saveStatus, setSaveStatus] = useState('saved');
 
   const allClasses = useLiveQuery(() => db.classes.toArray()) || [];
 
@@ -31,20 +32,100 @@ export default function ExamDetail() {
     db.wrongNotes.where('examId').equals(id).toArray()
   , [id]) || [];
 
+  const urlsRef = useRef([]);
+  const isInitializedRef = useRef(false);
+  const lastSavedRef = useRef(null);
+  const pendingPayloadRef = useRef(null);
+
   useEffect(() => {
-    if (exam && (!localConfig || imageUrls.length === 0)) {
+    /* eslint-disable react-hooks/set-state-in-effect */
+    if (exam && !isInitializedRef.current) {
       setLocalConfig(exam.config);
       setEditedTitle(exam.title);
       setSelectedClassId(exam.classId);
-      const urls = exam.images.map(img => ({
-        ...img,
-        url: URL.createObjectURL(img.file),
-        scale: img.scale || 100 
-      }));
+      const urls = exam.images.map(img => {
+        const url = URL.createObjectURL(img.file);
+        urlsRef.current.push(url);
+        return {
+          ...img,
+          url,
+          scale: img.scale || 100 
+        };
+      });
       setImageUrls(urls);
-      return () => urls.forEach(u => URL.revokeObjectURL(u.url));
+      isInitializedRef.current = true;
     }
-  }, [exam, id]);
+  }, [exam]);
+
+  // Real-time auto-save effect
+  useEffect(() => {
+    if (!isInitializedRef.current || !exam) return;
+
+    const payload = {
+      title: editedTitle,
+      config: localConfig,
+      classId: selectedClassId,
+      images: imageUrls.map((img, index) => {
+        const { url, ...rest } = img;
+        return { ...rest, order: index };
+      })
+    };
+
+    const payloadHash = JSON.stringify(payload);
+
+    if (lastSavedRef.current === null) {
+      lastSavedRef.current = payloadHash;
+      return;
+    }
+
+    if (lastSavedRef.current === payloadHash) {
+      return;
+    }
+
+    setSaveStatus('saving');
+    pendingPayloadRef.current = payload;
+
+    const timer = setTimeout(async () => {
+      try {
+        await db.exams.update(id, {
+          title: payload.title,
+          config: payload.config,
+          classId: payload.classId,
+          images: payload.images,
+          updatedAt: new Date()
+        });
+        lastSavedRef.current = payloadHash;
+        setSaveStatus('saved');
+      } catch (err) {
+        console.error('Auto-save error:', err);
+        setSaveStatus('error');
+      }
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [id, editedTitle, localConfig, selectedClassId, imageUrls, exam]);
+
+  // Flush pending save on unmount
+  useEffect(() => {
+    return () => {
+      if (pendingPayloadRef.current && lastSavedRef.current !== JSON.stringify(pendingPayloadRef.current)) {
+        db.exams.update(id, {
+          title: pendingPayloadRef.current.title,
+          config: pendingPayloadRef.current.config,
+          classId: pendingPayloadRef.current.classId,
+          images: pendingPayloadRef.current.images,
+          updatedAt: new Date()
+        }).catch(console.error);
+      }
+    };
+  }, [id]);
+
+  useEffect(() => {
+    const urls = urlsRef.current;
+    return () => {
+      urls.forEach(u => URL.revokeObjectURL(u));
+    };
+  }, []);
 
   const handlePrint = () => {
     printExam(editedTitle, imageUrls, localConfig);
@@ -54,9 +135,7 @@ export default function ExamDetail() {
     const totalScore = 100;
     let currentTotal = 0;
     let unassignedCount = 0;
-
     items.forEach(img => {
-      // Check if score is strictly a number and >= 0
       const s = img.score;
       if (s !== null && s !== undefined && s !== '' && !isNaN(s)) {
         currentTotal += Number(s);
@@ -68,26 +147,23 @@ export default function ExamDetail() {
     if (unassignedCount === 0) return items;
 
     const remainingScore = totalScore - currentTotal;
-    
     if (remainingScore <= 0) {
-       return items.map(img => {
-         const s = img.score;
-         return {
-           ...img,
-           score: (s !== null && s !== undefined && s !== '' && !isNaN(s)) ? Number(s) : 0
-         };
-       });
+      return items.map(img => {
+        const s = img.score;
+        return {
+          ...img,
+          score: (s !== null && s !== undefined && s !== '' && !isNaN(s)) ? Number(s) : 0
+        };
+      });
     }
 
     const baseScore = Math.floor(remainingScore / unassignedCount);
     const remainder = remainingScore % unassignedCount;
-
     let remainderCount = remainder;
 
     return items.map(img => {
       const s = img.score;
       if (s !== null && s !== undefined && s !== '' && !isNaN(s)) return img;
-      
       let newScore = baseScore;
       if (remainderCount > 0) {
         newScore += 1;
@@ -97,39 +173,9 @@ export default function ExamDetail() {
     });
   };
 
-  const saveConfig = async () => {
-    const scoredImages = distributeScores(imageUrls);
-
-    const updatedImages = scoredImages.map((img, index) => ({
-      id: img.id,
-      name: img.name,
-      file: img.file,
-      order: index,
-      scale: img.scale,
-      answer: img.answer,
-      score: img.score
-    }));
-
-    await db.exams.update(id, { 
-      config: localConfig,
-      title: editedTitle,
-      classId: selectedClassId,
-      images: updatedImages,
-      updatedAt: new Date()
-    });
-
-    // Update local state to reflect distributed scores
-    setImageUrls(prev => prev.map(img => {
-      const updated = scoredImages.find(s => s.id === img.id);
-      return updated ? { ...img, score: updated.score } : img;
-    }));
-
-    setIsEditing(false);
-    setIsSimpleEditing(false);
-  };
-
   const deleteExam = async () => {
     if (confirm('이 시험지를 삭제하시겠습니까?')) {
+      pendingPayloadRef.current = null;
       await db.exams.delete(id);
       navigate(`/class/${exam.classId}`);
     }
@@ -137,14 +183,18 @@ export default function ExamDetail() {
 
   const handleAddImage = (e) => {
     const files = Array.from(e.target.files);
-    const newImages = files.map(file => ({
-      id: Math.random().toString(36).substr(2, 9),
-      file: file,
-      name: file.name,
-      url: URL.createObjectURL(file),
-      order: imageUrls.length,
-      scale: 100
-    }));
+    const newImages = files.map(file => {
+      const url = URL.createObjectURL(file);
+      urlsRef.current.push(url);
+      return {
+        id: Math.random().toString(36).substr(2, 9),
+        file: file,
+        name: file.name,
+        url,
+        order: imageUrls.length,
+        scale: 100
+      };
+    });
     setImageUrls(prev => [...prev, ...newImages]);
   };
 
@@ -219,29 +269,6 @@ export default function ExamDetail() {
 
   const currentClass = exam && allClasses ? allClasses.find(c => c.id === exam.classId) : null;
 
-  const hasChanges = exam && (
-    JSON.stringify(localConfig) !== JSON.stringify(exam.config) ||
-    editedTitle !== exam.title ||
-    selectedClassId !== exam.classId ||
-    imageUrls.length !== exam.images.length
-  );
-
-  const handleCancel = () => {
-    if (exam) {
-      setLocalConfig(exam.config);
-      setEditedTitle(exam.title);
-      setSelectedClassId(exam.classId);
-      const urls = exam.images.map(img => ({
-        ...img,
-        url: URL.createObjectURL(img.file),
-        scale: img.scale || 100 
-      }));
-      setImageUrls(urls);
-      setIsEditing(false);
-      setIsSimpleEditing(false);
-    }
-  };
-
   if (!exam || !localConfig) return <div className="p-8">로딩 중...</div>;
 
   return (
@@ -251,16 +278,17 @@ export default function ExamDetail() {
         subtitle={currentClass ? `클래스: ${currentClass.name}` : ''}
         isEditing={isEditing}
         isSimpleEditing={isSimpleEditing}
-        hasChanges={hasChanges}
+        saveStatus={saveStatus}
         onTitleChange={setEditedTitle}
         onBack={() => navigate(`/class/${exam.classId}`)}
-        onSave={saveConfig}
-        onCancel={handleCancel}
         onEdit={() => {
-          setIsEditing(true);
-          setIsSimpleEditing(false);
+          setIsEditing(prev => !prev);
+          if (!isEditing) setIsSimpleEditing(false);
         }}
-        onToggleSimpleEdit={() => setIsSimpleEditing(!isSimpleEditing)}
+        onToggleSimpleEdit={() => {
+          setIsSimpleEditing(prev => !prev);
+          if (!isSimpleEditing) setIsEditing(false);
+        }}
         onPrint={handlePrint}
         onDelete={deleteExam}
         deleteTooltip="시험지 삭제"
