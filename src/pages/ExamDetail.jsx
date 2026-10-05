@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { arrayMove } from '@dnd-kit/sortable';
 import { db } from '../db/db';
-import { printExam } from '../utils/printHelper';
+import { printExam, downloadExamPdf } from '../utils/printHelper';
 import ExamHeader from '../components/exam/ExamHeader';
 import SettingsSidebar from '../components/exam/SettingsSidebar';
 import ExamPreview from '../components/exam/ExamPreview';
@@ -16,11 +16,11 @@ export default function ExamDetail() {
   const exam = useLiveQuery(() => db.exams.get(id), [id]);
   const [localConfig, setLocalConfig] = useState(null);
   const [imageUrls, setImageUrls] = useState([]);
-  const [isEditing, setIsEditing] = useState(false);
   const [isSimpleEditing, setIsSimpleEditing] = useState(false);
   const [editedTitle, setEditedTitle] = useState('');
   const [selectedClassId, setSelectedClassId] = useState(null);
   const [saveStatus, setSaveStatus] = useState('saved');
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
 
   const allClasses = useLiveQuery(() => db.classes.toArray()) || [];
 
@@ -66,8 +66,9 @@ export default function ExamDetail() {
       config: localConfig,
       classId: selectedClassId,
       images: imageUrls.map((img, index) => {
-        const { url, ...rest } = img;
-        return { ...rest, order: index };
+        const newImg = { ...img, order: index };
+        delete newImg.url;
+        return newImg;
       })
     };
 
@@ -131,6 +132,19 @@ export default function ExamDetail() {
     printExam(editedTitle, imageUrls, localConfig);
   };
 
+  const handleDownloadPdf = async () => {
+    if (isDownloadingPdf) return;
+    setIsDownloadingPdf(true);
+    try {
+      await downloadExamPdf(editedTitle);
+    } catch (err) {
+      console.error('PDF 다운로드 실패:', err);
+      alert('PDF 다운로드 중 오류가 발생했습니다: ' + (err?.message || '알 수 없는 오류'));
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
+
   const distributeScores = (items) => {
     const totalScore = 100;
     let currentTotal = 0;
@@ -192,7 +206,10 @@ export default function ExamDetail() {
         name: file.name,
         url,
         order: imageUrls.length,
-        scale: 100
+        scale: 100,
+        difficulty: 1,
+        badge: "기본",
+        pageBreak: false
       };
     });
     setImageUrls(prev => [...prev, ...newImages]);
@@ -200,7 +217,13 @@ export default function ExamDetail() {
 
   const handleDeleteImage = useCallback((imageId) => {
     if (confirm('이 문제를 삭제하시겠습니까?')) {
-      setImageUrls(prev => prev.filter(img => img.id !== imageId));
+      setImageUrls(prev => {
+        const target = prev.find(img => img.id === imageId);
+        if (target?.url && target?.file) {
+          URL.revokeObjectURL(target.url);
+        }
+        return prev.filter(img => img.id !== imageId);
+      });
     }
   }, []);
 
@@ -229,15 +252,11 @@ export default function ExamDetail() {
     const resetImages = imageUrls.map(img => ({ ...img, score: '' }));
     const scoredImages = distributeScores(resetImages);
     
-    const updatedImages = scoredImages.map((img, index) => ({
-      id: img.id,
-      name: img.name,
-      file: img.file,
-      order: index,
-      scale: img.scale,
-      answer: img.answer,
-      score: img.score
-    }));
+    const updatedImages = scoredImages.map((img, index) => {
+      const newImg = { ...img, order: index };
+      delete newImg.url;
+      return newImg;
+    });
 
     await db.exams.update(id, { 
       images: updatedImages,
@@ -276,29 +295,20 @@ export default function ExamDetail() {
       <ExamHeader 
         title={editedTitle}
         subtitle={currentClass ? `클래스: ${currentClass.name}` : ''}
-        isEditing={isEditing}
         isSimpleEditing={isSimpleEditing}
         saveStatus={saveStatus}
         onTitleChange={setEditedTitle}
         onBack={() => navigate(`/class/${exam.classId}`)}
-        onEdit={() => {
-          setIsEditing(prev => !prev);
-          if (!isEditing) setIsSimpleEditing(false);
-        }}
-        onToggleSimpleEdit={() => {
-          setIsSimpleEditing(prev => !prev);
-          if (!isSimpleEditing) setIsEditing(false);
-        }}
+        onToggleSimpleEdit={() => setIsSimpleEditing(prev => !prev)}
         onPrint={handlePrint}
-        onDelete={deleteExam}
-        deleteTooltip="시험지 삭제"
+        onDownloadPdf={handleDownloadPdf}
+        isDownloadingPdf={isDownloadingPdf}
       />
 
       <div className="flex-1 flex overflow-hidden">
         <SettingsSidebar 
           localConfig={localConfig}
           setLocalConfig={setLocalConfig}
-          isEditing={isEditing}
           isSimpleEditing={isSimpleEditing}
           onAddImage={handleAddImage}
           students={studentData}
@@ -317,7 +327,6 @@ export default function ExamDetail() {
           title={editedTitle}
           config={localConfig}
           images={imageUrls}
-          isEditing={isEditing}
           onImageScale={handleImageScale}
           onImageDelete={handleDeleteImage}
           onImageUpdate={handleImageUpdate}

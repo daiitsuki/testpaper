@@ -1,17 +1,17 @@
 import React from 'react';
 
-export default function AnswerKeyTemplate({ title, images, config, isBottom = false }) {
+export default function AnswerKeyTemplate({ title, chunkImages = [], config, isBottom = false, startIndex = 0, isFirstChunk = true }) {
   const hasScore = !(config?.template === 'jschool' && config?.showScore === false);
-  const half = Math.ceil(images.length / 2);
+  const half = Math.ceil(chunkImages.length / 2);
   const rows = [];
   for (let i = 0; i < half; i++) {
-    const img1 = images[i];
-    const img2 = images[i + half];
+    const img1 = chunkImages[i];
+    const img2 = chunkImages[i + half];
     rows.push({
-      idx1: i + 1,
+      idx1: startIndex + i + 1,
       ans1: img1?.answer || "-",
       score1: img1?.score || "-",
-      idx2: img2 ? i + 1 + half : "",
+      idx2: img2 ? startIndex + i + 1 + half : "",
       ans2: img2 ? (img2.answer || "-") : "",
       score2: img2 ? (img2.score || "-") : ""
     });
@@ -19,7 +19,7 @@ export default function AnswerKeyTemplate({ title, images, config, isBottom = fa
 
   return (
     <>
-      {config?.template === 'jschool' ? (
+      {isFirstChunk && config?.template === 'jschool' && (
         <div className={`w-full flex flex-col mb-8 border-b-2 border-dashed border-slate-300 pb-4 ${isBottom ? 'mt-8 border-t-2 pt-8' : ''}`}>
           <div className="w-full bg-slate-900 text-white text-[10px] font-bold py-1 px-4 mb-4 flex justify-between rounded-t-sm">
             <span>J SCHOOL EDU • WEEKLY WORKSHEET</span>
@@ -35,7 +35,9 @@ export default function AnswerKeyTemplate({ title, images, config, isBottom = fa
             )}
           </div>
         </div>
-      ) : (
+      )}
+      
+      {isFirstChunk && config?.template !== 'jschool' && (
         <div className={`border-b-4 border-double border-slate-900 pb-4 mb-8 text-center ${isBottom ? 'mt-8 border-t-4 pt-8' : ''}`}>
           <h1 className="text-2xl font-black mb-2 tracking-tighter">
             {title} - {config?.showScore === false ? '정답표' : '정답 및 배점'}

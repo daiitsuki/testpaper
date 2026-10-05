@@ -1,3 +1,7 @@
+import { toCanvas } from 'html-to-image';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
+
 /**
  * WYSIWYG Exam Printing Engine
  * Clones the exact rendered A4 page DOM from ExamPreview,
@@ -34,7 +38,23 @@ export const printExam = (title) => {
   doc.write(`<!DOCTYPE html><html><head><title>${title || '시험지 인쇄'}</title></head><body></body></html>`);
   doc.close();
 
-  // Copy all style and link tags from main document head
+  // 1. Copy compiled CSS rules from document.styleSheets for 100% style fidelity
+  Array.from(document.styleSheets).forEach((sheet) => {
+    try {
+      if (sheet.cssRules && sheet.cssRules.length > 0) {
+        const style = doc.createElement('style');
+        style.textContent = Array.from(sheet.cssRules)
+          .map((rule) => rule.cssText)
+          .join('\n');
+        doc.head.appendChild(style);
+        return;
+      }
+    } catch {
+      // Cross-origin stylesheet access might throw
+    }
+  });
+
+  // 2. Also copy style and link tags from main document head as backup
   const headElements = document.querySelectorAll('style, link[rel="stylesheet"]');
   headElements.forEach((el) => {
     doc.head.appendChild(el.cloneNode(true));
@@ -50,6 +70,7 @@ export const printExam = (title) => {
     * {
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
+      box-sizing: border-box;
     }
     html, body {
       margin: 0 !important;
@@ -69,10 +90,21 @@ export const printExam = (title) => {
       break-inside: avoid !important;
       box-sizing: border-box !important;
       overflow: hidden !important;
+      background: white !important;
     }
     .a4-paper:last-child {
       page-break-after: auto !important;
       break-after: auto !important;
+    }
+    .questions-container {
+      height: 100% !important;
+      box-sizing: border-box !important;
+    }
+    .question-item {
+      break-inside: avoid !important;
+      page-break-inside: avoid !important;
+      display: block !important;
+      width: 100% !important;
     }
     .no-print {
       display: none !important;
@@ -120,4 +152,90 @@ export const printExam = (title) => {
       }
     }, 250);
   });
+};
+
+/**
+ * Directly generates and downloads an A4 PDF of the rendered exam.
+ * Preserves multi-column layout, fonts, and images with shadow removed.
+ */
+export const downloadExamPdf = async (title) => {
+  const container = document.getElementById('exam-preview-pages');
+  if (!container) {
+    console.error('Print container #exam-preview-pages not found');
+    throw new Error('시험지 미리보기 영역을 찾을 수 없습니다.');
+  }
+
+  const pages = container.querySelectorAll('.a4-paper');
+  if (!pages || pages.length === 0) {
+    console.error('No printable .a4-paper pages found');
+    throw new Error('다운로드할 시험지 페이지가 없습니다.');
+  }
+
+  // Ensure all images are loaded before capturing
+  const imgPromises = Array.from(container.querySelectorAll('img')).map((img) => {
+    if (img.complete) return Promise.resolve();
+    return new Promise((resolve) => {
+      img.onload = resolve;
+      img.onerror = resolve;
+    });
+  });
+  await Promise.all(imgPromises);
+
+  const pdf = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4',
+    compress: true,
+  });
+
+  const filterNoPrint = (node) => {
+    if (node?.classList && node.classList.contains('no-print')) {
+      return false;
+    }
+    return true;
+  };
+
+  for (let i = 0; i < pages.length; i++) {
+    const page = pages[i];
+    if (i > 0) {
+      pdf.addPage('a4', 'portrait');
+    }
+
+    let imgData = null;
+    try {
+      const canvas = await toCanvas(page, {
+        pixelRatio: 2,
+        backgroundColor: '#ffffff',
+        style: {
+          boxShadow: 'none',
+        },
+        filter: filterNoPrint,
+        skipFonts: true,
+        cacheBust: false,
+      });
+      imgData = canvas.toDataURL('image/jpeg', 0.95);
+    } catch (err) {
+      console.warn('toCanvas failed, falling back to html2canvas:', err);
+      const canvas = await html2canvas(page, {
+        scale: 2,
+        backgroundColor: '#ffffff',
+        useCORS: true,
+        allowTaint: true,
+        logging: false,
+        ignoreElements: (el) => el?.classList?.contains('no-print'),
+        onclone: (clonedDoc) => {
+          const clonedPage = clonedDoc.querySelectorAll('.a4-paper')[i];
+          if (clonedPage) {
+            clonedPage.style.boxShadow = 'none';
+          }
+        },
+      });
+      imgData = canvas.toDataURL('image/jpeg', 0.95);
+    }
+
+    pdf.addImage(imgData, 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
+  }
+
+  const safeTitle = (title?.trim() || '시험지').replace(/[/\\?%*:|"<>]/g, '_');
+  pdf.save(`${safeTitle}.pdf`);
 };

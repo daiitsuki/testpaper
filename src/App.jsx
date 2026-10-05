@@ -8,6 +8,7 @@ import StudentDetail from './pages/StudentDetail';
 import WrongNoteCreator from './pages/WrongNoteCreator';
 import WrongNoteDetail from './pages/WrongNoteDetail';
 import Settings from './pages/Settings';
+import ExamMerge from './pages/ExamMerge';
 
 function App() {
   return (
@@ -18,6 +19,7 @@ function App() {
           <Route path="class/:classId" element={<ClassDetail />} />
           <Route path="student/:studentId" element={<StudentDetail />} />
           <Route path="exam/new" element={<ExamCreator />} />
+          <Route path="exam/merge" element={<ExamMerge />} />
           <Route path="exam/:examId" element={<ExamDetail />} />
           <Route path="exam/wrong/:noteId" element={<WrongNoteDetail />} />
           <Route path="wrong-note/new/:studentId/:examId" element={<WrongNoteCreator />} />

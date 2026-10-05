@@ -7,6 +7,8 @@ import {
   FilePlus,
   Users,
   GripVertical,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import {
   DndContext,
@@ -25,7 +27,13 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { useState } from "react";
 
-function SortableSimpleItem({ img, idx, onImageUpdate, showScore = true, showDifficulty = true }) {
+function SortableSimpleItem({
+  img,
+  idx,
+  onImageUpdate,
+  showScore = true,
+  showDifficulty = true,
+}) {
   const {
     attributes,
     listeners,
@@ -69,9 +77,11 @@ function SortableSimpleItem({ img, idx, onImageUpdate, showScore = true, showDif
         {showScore && (
           <input
             type="number"
-            value={img.score === 0 ? "0" : (img.score || "")}
+            value={img.score === 0 ? "0" : img.score || ""}
             onChange={(e) =>
-              onImageUpdate(img.id, { score: e.target.value === '' ? '' : Number(e.target.value) })
+              onImageUpdate(img.id, {
+                score: e.target.value === "" ? "" : Number(e.target.value),
+              })
             }
             placeholder="자동"
             className="w-12 bg-white border border-slate-200 rounded-lg px-1 py-1 text-sm text-center focus:ring-2 focus:ring-indigo-500 outline-none"
@@ -95,7 +105,9 @@ function SortableSimpleItem({ img, idx, onImageUpdate, showScore = true, showDif
         {showDifficulty && (
           <select
             value={img.difficulty || 1}
-            onChange={(e) => onImageUpdate(img.id, { difficulty: Number(e.target.value) })}
+            onChange={(e) =>
+              onImageUpdate(img.id, { difficulty: Number(e.target.value) })
+            }
             className="w-16 bg-white border border-slate-200 rounded-lg px-1 py-1 text-xs focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer"
           >
             <option value={1}>★ 1</option>
@@ -106,7 +118,9 @@ function SortableSimpleItem({ img, idx, onImageUpdate, showScore = true, showDif
         <input
           type="text"
           value={img.questionId || ""}
-          onChange={(e) => onImageUpdate(img.id, { questionId: e.target.value })}
+          onChange={(e) =>
+            onImageUpdate(img.id, { questionId: e.target.value })
+          }
           placeholder="문제 ID"
           className="flex-1 min-w-0 bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
         />
@@ -115,6 +129,56 @@ function SortableSimpleItem({ img, idx, onImageUpdate, showScore = true, showDif
   );
 }
 
+
+const AccordionSection = ({ id, isExpanded, onToggle, title, icon: Icon, children }) => {
+  return (
+    <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+      <button
+        type="button"
+        onClick={onToggle}
+        className={`w-full flex items-center justify-between px-5 py-4 text-left group outline-none transition-colors ${
+          isExpanded
+            ? "bg-slate-50/80 border-b border-slate-100"
+            : "hover:bg-slate-50"
+        }`}
+      >
+        <div
+          className={`flex items-center gap-3 font-bold text-sm transition-colors ${
+            isExpanded
+              ? "text-indigo-700"
+              : "text-slate-700 group-hover:text-indigo-600"
+          }`}
+        >
+          {Icon && (
+            <Icon
+              size={18}
+              className={
+                isExpanded
+                  ? "text-indigo-500"
+                  : "text-slate-400 group-hover:text-indigo-400"
+              }
+            />
+          )}
+          {title}
+        </div>
+        <div
+          className={`transition-transform duration-200 ${
+            isExpanded
+              ? "text-indigo-400 rotate-180"
+              : "text-slate-300 group-hover:text-indigo-400"
+          }`}
+        >
+          <ChevronDown size={18} />
+        </div>
+      </button>
+      {isExpanded && (
+        <div className="p-5 space-y-6 animate-in slide-in-from-top-1 fade-in duration-200">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+};
 export default function SettingsSidebar({
   localConfig,
   setLocalConfig,
@@ -142,6 +206,20 @@ export default function SettingsSidebar({
 
   const [isDragOver, setIsDragOver] = useState(false);
 
+  const [expandedSections, setExpandedSections] = useState({
+    manage: false,
+    questions: false,
+    layout: true,
+  });
+
+  const toggleSection = (section) => {
+    setExpandedSections((prev) => ({
+      ...prev,
+      [section]: !prev[section],
+    }));
+  };
+
+
   const handleDragOver = (e) => {
     e.preventDefault();
     setIsDragOver(true);
@@ -155,13 +233,13 @@ export default function SettingsSidebar({
   const handleDrop = (e) => {
     e.preventDefault();
     setIsDragOver(false);
-    
+
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       // Mock the event structure to pass it to onAddImage which expects e.target.files
       const mockEvent = {
         target: {
-          files: e.dataTransfer.files
-        }
+          files: e.dataTransfer.files,
+        },
       };
       onAddImage(mockEvent);
     }
@@ -177,7 +255,7 @@ export default function SettingsSidebar({
   };
 
   return (
-    <aside className="w-80 bg-white border-r border-slate-200 p-6 overflow-y-auto">
+    <aside className="w-80 bg-white border-r border-slate-200 p-6 overflow-y-auto scrollbar-stable">
       <h2 className="font-bold text-lg mb-6 flex items-center gap-2">
         <Settings2 size={20} className="text-indigo-600" />
         {isSimpleEditing ? "간단 편집" : "상세 설정"}
@@ -189,9 +267,10 @@ export default function SettingsSidebar({
             <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2">
               <span className="w-16 text-center">번호</span>
               <span className="flex-1 px-4 text-center">정답</span>
-              {!(localConfig?.template === "jschool" && localConfig?.showScore === false) && (
-                <span className="w-12 text-center">배점</span>
-              )}
+              {!(
+                localConfig?.template === "jschool" &&
+                localConfig?.showScore === false
+              ) && <span className="w-12 text-center">배점</span>}
             </div>
             <DndContext
               sensors={sensors}
@@ -209,14 +288,27 @@ export default function SettingsSidebar({
                       img={img}
                       idx={idx}
                       onImageUpdate={onImageUpdate}
-                      showScore={!(localConfig?.template === "jschool" && localConfig?.showScore === false)}
-                      showDifficulty={!(localConfig?.template === "jschool" && localConfig?.showDifficulty === false)}
+                      showScore={
+                        !(
+                          localConfig?.template === "jschool" &&
+                          localConfig?.showScore === false
+                        )
+                      }
+                      showDifficulty={
+                        !(
+                          localConfig?.template === "jschool" &&
+                          localConfig?.showDifficulty === false
+                        )
+                      }
                     />
                   ))}
                 </div>
               </SortableContext>
             </DndContext>
-            {!(localConfig?.template === "jschool" && localConfig?.showScore === false) && (
+            {!(
+              localConfig?.template === "jschool" &&
+              localConfig?.showScore === false
+            ) && (
               <div className="pt-4 border-t border-slate-100 flex justify-between items-center px-2">
                 <span className="text-sm font-bold text-slate-600">총점</span>
                 <span
@@ -230,93 +322,408 @@ export default function SettingsSidebar({
         )}
 
         {!isSimpleEditing && (
-          <>
-            {isEditing && allClasses && (
-              <div className="space-y-4 pt-4 border-t border-slate-100">
-                <label className="text-sm font-bold text-slate-700 flex items-center gap-2">
-                  <Users size={16} /> 클래스 이동
+          <div className="space-y-6">
+            {/* 3. 레이아웃 및 템플릿 */}
+            <AccordionSection id="layout" isExpanded={expandedSections["layout"]} onToggle={() => toggleSection("layout")}
+              title="레이아웃 및 템플릿"
+              icon={LayoutIcon}
+            >
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wide">
+                  템플릿
                 </label>
-                <select
-                  value={selectedClassId || ""}
-                  onChange={(e) => onClassChange(Number(e.target.value))}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                >
-                  {allClasses.map((cls) => (
-                    <option key={cls.id} value={cls.id}>
-                      {cls.name}
-                    </option>
+                <div className="flex bg-slate-100 p-1 rounded-xl">
+                  {[
+                    { id: "default", label: "기본 양식" },
+                    { id: "jschool", label: "J SCHOOL" },
+                  ].map((tpl) => (
+                    <button
+                      key={tpl.id}
+                      onClick={() =>
+                        setLocalConfig((prev) => ({
+                          ...prev,
+                          template: tpl.id,
+                        }))
+                      }
+                      className={`flex-1 py-1.5 text-sm font-bold rounded-lg transition-all ${
+                        (localConfig?.template || "default") === tpl.id
+                          ? "bg-white text-indigo-600 shadow-sm"
+                          : "text-slate-500 hover:text-slate-700"
+                      }`}
+                    >
+                      {tpl.label}
+                    </button>
                   ))}
-                </select>
+                </div>
               </div>
-            )}
 
-            {onCreateNewWrongNote && !isEditing && (
-              <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100">
-                <button
-                  onClick={onCreateNewWrongNote}
-                  className="w-full flex flex-col items-center justify-center gap-2 py-4 text-indigo-600 hover:bg-indigo-100/50 rounded-xl transition-colors"
-                >
-                  <FilePlus size={24} />
-                  <span className="font-bold text-sm">
-                    오답노트 추가 생성하기
-                  </span>
-                  <span className="text-xs text-indigo-400">
-                    같은 시험지로 새 오답노트 만들기
-                  </span>
-                </button>
-              </div>
-            )}
+              {localConfig?.template === "jschool" && (
+                <div className="bg-slate-50 rounded-xl border border-slate-100 overflow-hidden mt-3">
+                  <div className="divide-y divide-slate-100">
+                    <div className="p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-sm font-medium text-slate-700">
+                          주차 표시
+                        </label>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="sr-only peer"
+                            checked={localConfig?.showWeek !== false}
+                            onChange={(e) =>
+                              setLocalConfig((prev) => ({
+                                ...prev,
+                                showWeek: e.target.checked,
+                              }))
+                            }
+                          />
+                          <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-500"></div>
+                        </label>
+                      </div>
+                      {localConfig?.showWeek !== false && (
+                        <input
+                          type="text"
+                          value={localConfig?.weekNumber || "01"}
+                          onChange={(e) =>
+                            setLocalConfig((prev) => ({
+                              ...prev,
+                              weekNumber: e.target.value,
+                            }))
+                          }
+                          className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all placeholder:text-slate-300"
+                          placeholder="예: 01"
+                        />
+                      )}
+                    </div>
 
-            {onAutoDistribute && !(localConfig?.template === "jschool" && localConfig?.showScore === false) && totalScore !== 100 && (
-              <div className="p-4 bg-amber-50 rounded-2xl border border-amber-200 space-y-3">
-                <div className="flex items-start gap-3">
-                  <AlertTriangle
-                    size={20}
-                    className="text-amber-500 shrink-0 mt-0.5"
-                  />
-                  <div>
-                    <p className="text-sm font-bold text-amber-800 mb-1">
-                      총점 주의 ({totalScore}점)
-                    </p>
-                    <p className="text-xs text-amber-700 leading-relaxed">
-                      현재 총점이 100점이 아닙니다. 아래 버튼을 클릭하여 점수를
-                      자동으로 재분배할 수 있습니다.
-                    </p>
+                    <div className="p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-sm font-medium text-slate-700">
+                          일자 표시
+                        </label>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="sr-only peer"
+                            checked={localConfig?.showDate !== false}
+                            onChange={(e) =>
+                              setLocalConfig((prev) => ({
+                                ...prev,
+                                showDate: e.target.checked,
+                              }))
+                            }
+                          />
+                          <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-500"></div>
+                        </label>
+                      </div>
+                      {localConfig?.showDate !== false && (
+                        <input
+                          type="text"
+                          value={
+                            localConfig?.date !== undefined
+                              ? localConfig.date
+                              : new Date()
+                                  .toLocaleDateString("ko-KR", {
+                                    year: "numeric",
+                                    month: "2-digit",
+                                    day: "2-digit",
+                                  })
+                                  .replace(/\./g, ".")
+                                  .replace(/ /g, "")
+                          }
+                          onChange={(e) =>
+                            setLocalConfig((prev) => ({
+                              ...prev,
+                              date: e.target.value,
+                            }))
+                          }
+                          className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all placeholder:text-slate-300"
+                        />
+                      )}
+                    </div>
+
+                    <div className="p-3 flex items-center justify-between">
+                      <label className="text-sm font-medium text-slate-700">
+                        점수 표시
+                      </label>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="sr-only peer"
+                          checked={localConfig?.showScore !== false}
+                          onChange={(e) =>
+                            setLocalConfig((prev) => ({
+                              ...prev,
+                              showScore: e.target.checked,
+                            }))
+                          }
+                        />
+                        <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-500"></div>
+                      </label>
+                    </div>
+
+                    <div className="p-3 flex items-center justify-between">
+                      <label className="text-sm font-medium text-slate-700">
+                        난이도 표시
+                      </label>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="sr-only peer"
+                          checked={localConfig?.showDifficulty !== false}
+                          onChange={(e) =>
+                            setLocalConfig((prev) => ({
+                              ...prev,
+                              showDifficulty: e.target.checked,
+                            }))
+                          }
+                        />
+                        <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-500"></div>
+                      </label>
+                    </div>
                   </div>
                 </div>
-                <button
-                  onClick={onAutoDistribute}
-                  className="w-full py-2.5 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-xl text-sm font-bold transition-colors shadow-sm border border-amber-200"
-                >
-                  점수 자동 재분배
-                </button>
-              </div>
-            )}
+              )}
 
-            {isEditing && (
-              <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100">
-                <label 
-                  className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-xl cursor-pointer transition-colors group ${
-                    isDragOver 
-                      ? 'border-indigo-500 bg-indigo-100' 
-                      : 'border-indigo-200 bg-white hover:bg-indigo-50'
+              <div className="space-y-4 pt-4 mt-4 border-t border-slate-100">
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wide">
+                    정답표 위치
+                  </label>
+                  <div className="flex bg-slate-100 p-1 rounded-xl">
+                    <button
+                      onClick={() =>
+                        setLocalConfig((prev) => ({
+                          ...prev,
+                          answerKeyLocation: "separate",
+                        }))
+                      }
+                      className={`flex-1 py-1.5 text-sm font-bold rounded-lg transition-all ${localConfig?.answerKeyLocation !== "bottom" ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                    >
+                      새 페이지
+                    </button>
+                    <button
+                      onClick={() =>
+                        setLocalConfig((prev) => ({
+                          ...prev,
+                          answerKeyLocation: "bottom",
+                        }))
+                      }
+                      className={`flex-1 py-1.5 text-sm font-bold rounded-lg transition-all ${localConfig?.answerKeyLocation === "bottom" ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                    >
+                      하단 이어서
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wide">
+                    단 구성
+                  </label>
+                  <div className="flex bg-slate-100 p-1 rounded-xl">
+                    {["1column", "2column"].map((col) => (
+                      <button
+                        key={col}
+                        onClick={() =>
+                          setLocalConfig((prev) => ({ ...prev, layout: col }))
+                        }
+                        className={`flex-1 py-1.5 text-sm font-bold rounded-lg transition-all ${localConfig?.layout === col ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                      >
+                        {col === "1column" ? "1단 구성" : "2단 구성"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-3 pt-2">
+                  <div className="flex justify-between items-center">
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wide">
+                      문제 간격
+                    </label>
+                    <span className="text-xs font-bold bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full">
+                      {localConfig?.spacing}px
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="300"
+                    step="5"
+                    value={localConfig?.spacing || 20}
+                    onChange={(e) =>
+                      setLocalConfig((prev) => ({
+                        ...prev,
+                        spacing: Number(e.target.value),
+                      }))
+                    }
+                    className="w-full accent-indigo-500"
+                  />
+                  <p className="text-[11px] text-slate-400 leading-tight">
+                    슬라이더를 조절하면 A4 용지 규격에 맞춰 비율이 다시
+                    계산됩니다.
+                  </p>
+                </div>
+              </div>
+            </AccordionSection>
+
+            {/* 1. 클래스 및 오답노트 */}
+            <AccordionSection id="manage" isExpanded={expandedSections["manage"]} onToggle={() => toggleSection("manage")}
+              title="클래스 및 오답노트"
+              icon={Users}
+            >
+              {allClasses && (
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wide">
+                    클래스 배정
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={selectedClassId || ""}
+                      onChange={(e) => onClassChange(Number(e.target.value))}
+                      className="w-full appearance-none bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-medium text-slate-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all shadow-sm"
+                    >
+                      {allClasses.map((cls) => (
+                        <option key={cls.id} value={cls.id}>
+                          {cls.name}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown
+                      size={16}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {onCreateNewWrongNote && (
+                <div className="pt-2">
+                  <button
+                    onClick={onCreateNewWrongNote}
+                    className="w-full flex items-center justify-between p-4 bg-indigo-50 hover:bg-indigo-100/70 border border-indigo-100 rounded-2xl transition-colors group"
+                  >
+                    <div className="flex flex-col text-left">
+                      <span className="font-bold text-sm text-indigo-700">
+                        새 오답노트 생성
+                      </span>
+                      <span className="text-xs text-indigo-400/80 mt-0.5">
+                        현재 시험지 복제하기
+                      </span>
+                    </div>
+                    <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shadow-sm text-indigo-600 group-hover:scale-110 transition-transform">
+                      <FilePlus size={16} />
+                    </div>
+                  </button>
+                </div>
+              )}
+
+              {students && (
+                <div className="pt-4 border-t border-slate-100">
+                  <div className="flex justify-between items-end mb-3">
+                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wide">
+                      오답노트 진행 현황
+                    </h3>
+                    <span className="text-[10px] font-bold text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-full">
+                      {students.filter((s) => s.existingNote).length} /{" "}
+                      {students.length}명
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {students.map(({ student, existingNote }) => (
+                      <button
+                        key={student.id}
+                        onClick={() =>
+                          onNavigateToWrongNote(student, existingNote)
+                        }
+                        className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all ${
+                          existingNote
+                            ? "bg-emerald-50/50 border-emerald-100 hover:bg-emerald-50 hover:border-emerald-200"
+                            : "bg-white border-slate-200 hover:border-indigo-300 hover:shadow-sm"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={`w-2 h-2 rounded-full ${existingNote ? "bg-emerald-500" : "bg-slate-200"}`}
+                          />
+                          <span
+                            className={`text-sm font-medium ${existingNote ? "text-slate-800" : "text-slate-600"}`}
+                          >
+                            {student.name}
+                          </span>
+                        </div>
+                        <span
+                          className={`text-xs font-bold ${existingNote ? "text-emerald-600" : "text-slate-300"}`}
+                        >
+                          {existingNote ? "보기 →" : "생성 →"}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </AccordionSection>
+
+            {/* 2. 문항 및 배점 편집 */}
+            <AccordionSection id="questions" isExpanded={expandedSections["questions"]} onToggle={() => toggleSection("questions")}
+              title="문항 및 배점 편집"
+              icon={FilePlus}
+            >
+              {onAutoDistribute &&
+                !(
+                  localConfig?.template === "jschool" &&
+                  localConfig?.showScore === false
+                ) &&
+                totalScore !== 100 && (
+                  <div className="p-4 bg-amber-50 rounded-xl border border-amber-200/50 shadow-sm">
+                    <div className="flex items-start gap-3 mb-3">
+                      <div className="p-1.5 bg-amber-100 rounded-lg text-amber-600">
+                        <AlertTriangle size={16} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-amber-900 leading-none mt-1">
+                          총점 불일치 ({totalScore}점)
+                        </p>
+                        <p className="text-xs text-amber-700/80 mt-1.5 leading-relaxed">
+                          총점이 100점이 되도록 모든 문항의 배점을 균등하게
+                          재조정합니다.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={onAutoDistribute}
+                      className="w-full py-2 bg-white hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-lg text-sm font-bold transition-colors"
+                    >
+                      자동 분배하기
+                    </button>
+                  </div>
+                )}
+
+              <div className="pt-2">
+                <label
+                  className={`flex flex-col items-center justify-center w-full py-8 border-2 border-dashed rounded-xl cursor-pointer transition-all ${
+                    isDragOver
+                      ? "border-indigo-500 bg-indigo-50/50 scale-[1.02]"
+                      : "border-slate-200 bg-slate-50 hover:bg-slate-100 hover:border-slate-300"
                   }`}
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
                 >
-                  <div className="flex flex-col items-center justify-center pt-5 pb-6 pointer-events-none">
-                    <Plus
-                      size={32}
-                      className={`mb-2 transition-colors ${isDragOver ? 'text-indigo-600' : 'text-indigo-400 group-hover:text-indigo-600'}`}
-                    />
-                    <p className={`mb-2 text-sm font-semibold ${isDragOver ? 'text-indigo-700' : 'text-indigo-500'}`}>
-                      문제 추가하기
-                    </p>
-                    <p className={`text-xs ${isDragOver ? 'text-indigo-500' : 'text-indigo-400'}`}>
-                      클릭하거나 이미지를 여기로 드래그
-                    </p>
+                  <div
+                    className={`p-3 rounded-full mb-3 transition-colors ${isDragOver ? "bg-indigo-100 text-indigo-600" : "bg-white text-slate-400 shadow-sm"}`}
+                  >
+                    <Plus size={20} />
                   </div>
+                  <p
+                    className={`text-sm font-bold mb-1 ${isDragOver ? "text-indigo-700" : "text-slate-700"}`}
+                  >
+                    문항 이미지 추가
+                  </p>
+                  <p
+                    className={`text-[11px] ${isDragOver ? "text-indigo-500" : "text-slate-400"}`}
+                  >
+                    클릭하거나 드래그 앤 드롭
+                  </p>
                   <input
                     type="file"
                     className="hidden"
@@ -326,226 +733,8 @@ export default function SettingsSidebar({
                   />
                 </label>
               </div>
-            )}
-
-            <div className="space-y-4">
-              <label className="text-sm font-bold text-slate-700 flex items-center gap-2">
-                <LayoutIcon size={16} />템플릿 선택
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  { id: "default", label: "기본 템플릿" },
-                  { id: "jschool", label: "J SCHOOL EDU" },
-                ].map((tpl) => (
-                  <button
-                    key={tpl.id}
-                    onClick={() =>
-                      setLocalConfig((prev) => ({ ...prev, template: tpl.id }))
-                    }
-                    className={`py-2 rounded-lg border-2 text-sm font-medium transition-all ${(localConfig?.template || 'default') === tpl.id ? "border-indigo-600 bg-indigo-50 text-indigo-700" : "border-slate-100 text-slate-500 hover:border-slate-200"}`}
-                  >
-                    {tpl.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {localConfig?.template === "jschool" && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <label className="text-sm font-bold text-slate-700">주차 표시</label>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input 
-                      type="checkbox" 
-                      className="sr-only peer"
-                      checked={localConfig?.showWeek !== false}
-                      onChange={(e) => setLocalConfig(prev => ({ ...prev, showWeek: e.target.checked }))}
-                    />
-                    <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
-                  </label>
-                </div>
-                {localConfig?.showWeek !== false && (
-                  <div className="space-y-2">
-                    <label className="text-sm font-bold text-slate-700">
-                      주차 (Week)
-                    </label>
-                    <input
-                      type="text"
-                      value={localConfig?.weekNumber || "01"}
-                      onChange={(e) =>
-                        setLocalConfig((prev) => ({
-                          ...prev,
-                          weekNumber: e.target.value,
-                        }))
-                      }
-                      placeholder="예: 01"
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                    />
-                  </div>
-                )}
-                
-                <div className="flex items-center justify-between mt-4">
-                  <label className="text-sm font-bold text-slate-700">일자 표시</label>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input 
-                      type="checkbox" 
-                      className="sr-only peer"
-                      checked={localConfig?.showDate !== false}
-                      onChange={(e) => setLocalConfig(prev => ({ ...prev, showDate: e.target.checked }))}
-                    />
-                    <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
-                  </label>
-                </div>
-                {localConfig?.showDate !== false && (
-                  <div className="space-y-2">
-                    <label className="text-sm font-bold text-slate-700">
-                      일자 (Date)
-                    </label>
-                    <input
-                      type="text"
-                      value={localConfig?.date !== undefined ? localConfig.date : new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\./g, '.').replace(/ /g, '')}
-                      onChange={(e) =>
-                        setLocalConfig((prev) => ({
-                          ...prev,
-                          date: e.target.value,
-                        }))
-                      }
-                      placeholder="예: 2026.09.10"
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                    />
-                  </div>
-                )}
-
-                <div className="flex items-center justify-between mt-4">
-                  <label className="text-sm font-bold text-slate-700">점수제도</label>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input 
-                      type="checkbox" 
-                      className="sr-only peer"
-                      checked={localConfig?.showScore !== false}
-                      onChange={(e) => setLocalConfig(prev => ({ ...prev, showScore: e.target.checked }))}
-                    />
-                    <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
-                  </label>
-                </div>
-
-                <div className="flex items-center justify-between mt-4">
-                  <label className="text-sm font-bold text-slate-700">난이도</label>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input 
-                      type="checkbox" 
-                      className="sr-only peer"
-                      checked={localConfig?.showDifficulty !== false}
-                      onChange={(e) => setLocalConfig(prev => ({ ...prev, showDifficulty: e.target.checked }))}
-                    />
-                    <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
-                  </label>
-                </div>
-              </div>
-            )}
-
-            <div className="space-y-3 pt-4 border-t border-slate-100">
-              <label className="text-sm font-bold text-slate-700">정답표 위치</label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => setLocalConfig(prev => ({ ...prev, answerKeyLocation: 'separate' }))}
-                  className={`py-2 rounded-lg border text-sm font-medium transition-all ${localConfig?.answerKeyLocation !== 'bottom' ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-500 hover:border-slate-300'}`}
-                >
-                  새 페이지 분리
-                </button>
-                <button
-                  onClick={() => setLocalConfig(prev => ({ ...prev, answerKeyLocation: 'bottom' }))}
-                  className={`py-2 rounded-lg border text-sm font-medium transition-all ${localConfig?.answerKeyLocation === 'bottom' ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-500 hover:border-slate-300'}`}
-                >
-                  문항 하단 이어서
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <label className="text-sm font-bold text-slate-700 flex items-center gap-2">
-                <LayoutIcon size={16} />단 구성
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                {["1column", "2column"].map((col) => (
-                  <button
-                    key={col}
-                    onClick={() =>
-                      setLocalConfig((prev) => ({ ...prev, layout: col }))
-                    }
-                    className={`py-2 rounded-lg border-2 text-sm font-medium transition-all ${localConfig?.layout === col ? "border-indigo-600 bg-indigo-50 text-indigo-700" : "border-slate-100 text-slate-500 hover:border-slate-200"}`}
-                  >
-                    {col === "1column" ? "1단" : "2단"}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div className="flex justify-between">
-                <label className="text-sm font-bold text-slate-700">
-                  문제 간격
-                </label>
-                <span className="text-xs font-bold text-indigo-600">
-                  {localConfig?.spacing}px
-                </span>
-              </div>
-              <div className="text-xs text-slate-700">
-                ⓘ 슬라이더를 조절 후 마우스를 때면 문제의 위치가 a4 사이즈에
-                맞게 재조정됩니다.
-              </div>
-              <input
-                type="range"
-                min="0"
-                max="300"
-                step="5"
-                value={localConfig?.spacing || 20}
-                onChange={(e) =>
-                  setLocalConfig((prev) => ({
-                    ...prev,
-                    spacing: Number(e.target.value),
-                  }))
-                }
-                className="w-full accent-indigo-600"
-              />
-            </div>
-
-            {students && !isEditing && (
-              <div className="pt-6 border-t border-slate-100">
-                <h3 className="text-sm font-bold text-slate-700 mb-4 flex items-center gap-2">
-                  <UserCheck size={16} />
-                  오답노트 생성 대상
-                </h3>
-                <div className="space-y-2">
-                  {students.map(({ student, existingNote }) => (
-                    <button
-                      key={student.id}
-                      onClick={() =>
-                        onNavigateToWrongNote(student, existingNote)
-                      }
-                      className={`w-full text-left px-4 py-3 rounded-xl border transition-all group ${existingNote ? "bg-emerald-50 border-emerald-100 hover:border-emerald-300" : "border-slate-200 hover:border-indigo-300 hover:bg-indigo-50"}`}
-                    >
-                      <div className="flex justify-between items-center">
-                        <div className="text-sm font-bold text-slate-800">
-                          {student.name}
-                        </div>
-                        {existingNote && (
-                          <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                        )}
-                      </div>
-                      <div
-                        className={`text-[10px] ${existingNote ? "text-emerald-600" : "text-slate-400 group-hover:text-indigo-500"}`}
-                      >
-                        {existingNote
-                          ? "생성됨 (상세보기) \u2192"
-                          : "오답노트 만들기 \u2192"}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </>
+            </AccordionSection>
+          </div>
         )}
       </div>
     </aside>

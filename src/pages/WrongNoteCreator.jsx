@@ -111,11 +111,13 @@ export default function WrongNoteCreator() {
     // Find the selected images from the original exam
     const selectedImages = exam.images
       .filter((img) => selectedIds.has(img.id))
-      .map((img, index) => ({
-        ...img,
-        badge: '오답', // Reset badge for wrong note
-        order: index,
-      }));
+      .map((img, index) => {
+        const { file, ...rest } = img;
+        return {
+          ...rest,
+          order: index,
+        };
+      });
 
     if (noteId) {
       // Update existing note

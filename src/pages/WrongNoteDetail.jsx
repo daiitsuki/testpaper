@@ -4,7 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { ListPlus, FileText } from 'lucide-react';
 import { arrayMove } from '@dnd-kit/sortable';
 import { db } from '../db/db';
-import { printExam } from '../utils/printHelper';
+import { printExam, downloadExamPdf } from '../utils/printHelper';
 import ExamHeader from '../components/exam/ExamHeader';
 import SettingsSidebar from '../components/exam/SettingsSidebar';
 import ExamPreview from '../components/exam/ExamPreview';
@@ -21,10 +21,10 @@ export default function WrongNoteDetail() {
 
   const [localConfig, setLocalConfig] = useState(null);
   const [imageUrls, setImageUrls] = useState([]);
-  const [isEditing, setIsEditing] = useState(false);
   const [isSimpleEditing, setIsSimpleEditing] = useState(false);
   const [editedTitle, setEditedTitle] = useState('');
   const [saveStatus, setSaveStatus] = useState('saved');
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
 
   const urlsRef = useRef([]);
   const isInitializedRef = useRef(false);
@@ -36,17 +36,63 @@ export default function WrongNoteDetail() {
     if (note && !isInitializedRef.current) {
       setLocalConfig(note.config);
       setEditedTitle(note.title);
-      const urls = note.images.map(img => {
-        const url = URL.createObjectURL(img.file);
-        urlsRef.current.push(url);
-        return {
-          ...img,
-          url,
-          scale: img.scale || 100
-        };
-      });
-      setImageUrls(urls);
-      isInitializedRef.current = true;
+      
+      const loadImages = async () => {
+        const originalExam = await db.exams.get(note.examId);
+        let needsMigration = false;
+        
+        const urls = note.images.map(img => {
+          let file = img.file;
+          if (file) needsMigration = true; // DB에 file 객체가 통째로 남아있는 옛날 포맷
+          
+          let latestMeta = {};
+
+          if (originalExam) {
+            const originalImg = originalExam.images.find(e => e.id === img.id);
+            if (originalImg) {
+              file = originalImg.file;
+              // 동기화를 위해 원본의 최신 메타데이터를 우선 반영 (단, 오답노트 전용 설정 제외)
+              latestMeta = {
+                answer: originalImg.answer,
+                badge: originalImg.badge,
+                difficulty: originalImg.difficulty,
+                score: originalImg.score,
+              };
+            }
+          }
+          
+          if (!file) {
+            console.error("Could not find file for image id", img.id);
+          }
+
+          const url = file ? URL.createObjectURL(file) : null;
+          if (url) urlsRef.current.push(url);
+          
+          return {
+            ...img,          // 오답노트의 기존 저장값 (scale, order 등)
+            ...latestMeta,   // 원본 시험지의 최신 메타데이터로 덮어쓰기
+            url,
+            file,
+            scale: img.scale || 100
+          };
+        });
+        setImageUrls(urls);
+        isInitializedRef.current = true;
+
+        // "들어가기만 해도" 무거운 오답노트를 가볍게 마이그레이션 (DB에서 file 삭제)
+        if (needsMigration) {
+          const migratedImages = urls.map(img => {
+            const cleanImg = { ...img };
+            delete cleanImg.url;
+            delete cleanImg.file;
+            return cleanImg;
+          });
+          db.wrongNotes.update(id, { images: migratedImages });
+          console.log(`WrongNote ${id}: Migrated to light format`);
+        }
+      };
+
+      loadImages();
     }
   }, [note]);
 
@@ -58,8 +104,10 @@ export default function WrongNoteDetail() {
       title: editedTitle,
       config: localConfig,
       images: imageUrls.map((img, index) => {
-        const { url, ...rest } = img;
-        return { ...rest, order: index };
+        const newImg = { ...img, order: index };
+        delete newImg.url;
+        delete newImg.file; // MUST delete file before saving to prevent DB bloat
+        return newImg;
       })
     };
 
@@ -115,11 +163,11 @@ export default function WrongNoteDetail() {
     };
   }, []);
 
-  const handleImageUpdate = (id, updates) => {
+  const handleImageUpdate = useCallback((id, updates) => {
     setImageUrls(prev => prev.map(img => 
       img.id === id ? { ...img, ...updates } : img
     ));
-  };
+  }, []);
 
   const handleReorder = useCallback((oldIndex, newIndex) => {
     setImageUrls((items) => {
@@ -139,17 +187,23 @@ export default function WrongNoteDetail() {
     }
   };
 
-  const handleDeleteImage = (imageId) => {
+  const handleDeleteImage = useCallback((imageId) => {
     if (confirm('이 문제를 삭제하시겠습니까?')) {
-      setImageUrls(prev => prev.filter(img => img.id !== imageId));
+      setImageUrls(prev => {
+        const target = prev.find(img => img.id === imageId);
+        if (target?.url) {
+          URL.revokeObjectURL(target.url);
+        }
+        return prev.filter(img => img.id !== imageId);
+      });
     }
-  };
+  }, []);
 
-  const handleImageScale = (id, newScale) => {
+  const handleImageScale = useCallback((id, newScale) => {
     setImageUrls(prev => prev.map(img => 
       img.id === id ? { ...img, scale: Number(newScale) } : img
     ));
-  };
+  }, []);
   
   const handleAddImage = () => {
      // Optional: Implement adding images to wrong note if requested later
@@ -161,6 +215,19 @@ export default function WrongNoteDetail() {
     printExam(editedTitle, imageUrls, localConfig);
   };
 
+  const handleDownloadPdf = async () => {
+    if (isDownloadingPdf) return;
+    setIsDownloadingPdf(true);
+    try {
+      await downloadExamPdf(editedTitle);
+    } catch (err) {
+      console.error('PDF 다운로드 실패:', err);
+      alert('PDF 다운로드 중 오류가 발생했습니다: ' + (err?.message || '알 수 없는 오류'));
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
+
   const handleCreateNewWrongNote = () => {
     navigate(`/wrong-note/new/${note.studentId}/${note.examId}`);
   };
@@ -170,24 +237,16 @@ export default function WrongNoteDetail() {
       <ExamHeader 
         title={editedTitle}
         subtitle={student ? `학생: ${student.name}` : ''}
-        isEditing={isEditing}
         isSimpleEditing={isSimpleEditing}
         saveStatus={saveStatus}
         onTitleChange={setEditedTitle}
         onBack={() => navigate(`/student/${note.studentId}`)}
-        onEdit={() => {
-          setIsEditing(prev => !prev);
-          if (!isEditing) setIsSimpleEditing(false);
-        }}
-        onToggleSimpleEdit={() => {
-          setIsSimpleEditing(prev => !prev);
-          if (!isSimpleEditing) setIsEditing(false);
-        }}
+        onToggleSimpleEdit={() => setIsSimpleEditing(prev => !prev)}
         onPrint={handlePrint}
-        onDelete={deleteNote}
-        deleteTooltip="오답노트 삭제"
+        onDownloadPdf={handleDownloadPdf}
+        isDownloadingPdf={isDownloadingPdf}
         extraActions={
-          !isEditing && !isSimpleEditing && (
+          !isSimpleEditing && (
             <div className="flex items-center gap-2">
               <button
                 onClick={() => navigate(`/exam/${note.examId}`)}
@@ -212,7 +271,6 @@ export default function WrongNoteDetail() {
         <SettingsSidebar 
           localConfig={localConfig}
           setLocalConfig={setLocalConfig}
-          isEditing={isEditing}
           isSimpleEditing={isSimpleEditing}
           onAddImage={handleAddImage}
           onCreateNewWrongNote={handleCreateNewWrongNote}
@@ -225,7 +283,6 @@ export default function WrongNoteDetail() {
           title={editedTitle}
           config={localConfig}
           images={imageUrls}
-          isEditing={isEditing}
           onImageScale={handleImageScale}
           onImageDelete={handleDeleteImage}
           onImageUpdate={handleImageUpdate}

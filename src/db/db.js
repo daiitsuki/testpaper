@@ -9,6 +9,11 @@ db.version(1).stores({
   wrongNotes: '++id, studentId, examId, createdAt'
 });
 
+db.version(2).stores({
+  exams: '++id, title, classId, folderId, createdAt, updatedAt',
+  folders: '++id, classId, name, createdAt'
+});
+
 // Helper for storing blobs (images)
 // In IndexedDB, we can store Blobs directly.
 // The 'exams' and 'wrongNotes' stores will contain arrays of { file: Blob, id: string, order: number }

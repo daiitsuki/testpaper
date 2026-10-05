@@ -5,43 +5,41 @@
 }
 
 @layer base {
+  html {
+    scrollbar-gutter: stable;
+  }
+  
   body {
     @apply bg-slate-50 text-slate-900;
   }
-}
 
-/* A4 Print Styles */
-@media print {
-  @page {
-    size: A4;
-    margin: 10mm;
-  }
-  
-  html, body, #root {
-    height: auto !important;
-    overflow: visible !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    background: white !important;
+  /* Global Custom Scrollbar */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
   }
 
-  /* Reset the scrollable SPA layout for print */
-  div {
-    height: auto !important;
-    overflow: visible !important;
-    display: block !important; /* Break flexbox layouts */
+  *::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
   }
 
-  /* Hide UI elements */
-  .no-print, nav, aside, header, button {
-    display: none !important;
+  *::-webkit-scrollbar-track {
+    background: transparent;
   }
 
-  .print-only {
-    display: block !important;
+  *::-webkit-scrollbar-thumb {
+    background-color: #cbd5e1;
+    border-radius: 9999px;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: #94a3b8;
   }
 }
 
-.print-only {
-  display: none;
+@layer utilities {
+  .scrollbar-stable {
+    scrollbar-gutter: stable;
+  }
 }

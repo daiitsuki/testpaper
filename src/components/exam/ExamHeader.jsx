@@ -1,15 +1,20 @@
-import { ChevronLeft, Printer, FileEdit, Trash2, LayoutList, Check, RefreshCw } from "lucide-react";
+import {
+  ChevronLeft,
+  Printer,
+  LayoutList,
+  Check,
+  RefreshCw,
+  Download,
+} from "lucide-react";
 
 export default function ExamHeader({
   title,
   subtitle,
-  isEditing,
   onTitleChange,
   onBack,
-  onEdit,
   onPrint,
-  onDelete,
-  deleteTooltip = "삭제",
+  onDownloadPdf,
+  isDownloadingPdf = false,
   extraActions,
   onToggleSimpleEdit,
   isSimpleEditing,
@@ -77,29 +82,6 @@ export default function ExamHeader({
           </button>
         )}
 
-        {onEdit && (
-          <button
-            onClick={onEdit}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg font-medium text-sm transition-colors ${
-              isEditing
-                ? "bg-indigo-600 text-white shadow-sm"
-                : "text-slate-600 bg-slate-100 hover:bg-slate-200"
-            }`}
-          >
-            {isEditing ? (
-              <>
-                <Check size={17} />
-                편집 완료
-              </>
-            ) : (
-              <>
-                <FileEdit size={17} />
-                문제 편집
-              </>
-            )}
-          </button>
-        )}
-
         {onPrint && (
           <button
             onClick={onPrint}
@@ -110,13 +92,19 @@ export default function ExamHeader({
           </button>
         )}
 
-        {onDelete && (
+        {onDownloadPdf && (
           <button
-            onClick={onDelete}
-            className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors ml-0.5"
-            title={deleteTooltip}
+            onClick={onDownloadPdf}
+            disabled={isDownloadingPdf}
+            className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium text-sm hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors shadow-sm"
+            title="PDF로 다운로드"
           >
-            <Trash2 size={18} />
+            {isDownloadingPdf ? (
+              <RefreshCw size={17} className="animate-spin" />
+            ) : (
+              <Download size={17} />
+            )}
+            {isDownloadingPdf ? "생성 중..." : "PDF 다운로드"}
           </button>
         )}
       </div>
